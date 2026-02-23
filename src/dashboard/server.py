@@ -156,9 +156,10 @@ def create_dashboard_router(
                 browser_backend=acfg.get("browser_backend", ""),
                 thinking=acfg.get("thinking", ""),
             )
-            agent_registry[name] = url
             if router is not None:
-                router.register_agent(name, url)
+                router.register_agent(name, url, role=role)
+            else:
+                agent_registry[name] = url
             if transport is not None:
                 from src.host.transport import HttpTransport
                 if isinstance(transport, HttpTransport):
@@ -192,7 +193,8 @@ def create_dashboard_router(
         # Unregister from router, transport, and health monitor
         if router is not None:
             router.unregister_agent(agent_id)
-        agent_registry.pop(agent_id, None)
+        else:
+            agent_registry.pop(agent_id, None)
         if transport is not None:
             from src.host.transport import HttpTransport
             if isinstance(transport, HttpTransport):
@@ -357,7 +359,14 @@ def create_dashboard_router(
                 browser_backend=agent_cfg.get("browser_backend", ""),
                 thinking=agent_cfg.get("thinking", ""),
             )
-            agent_registry[agent_id] = url
+            if router is not None:
+                router.register_agent(agent_id, url, role=agent_cfg.get("role", ""))
+            else:
+                agent_registry[agent_id] = url
+            if transport is not None:
+                from src.host.transport import HttpTransport
+                if isinstance(transport, HttpTransport):
+                    transport.register(agent_id, url)
             ready = await runtime.wait_for_agent(agent_id, timeout=60)
             return {"restarted": True, "ready": ready}
         except Exception as e:

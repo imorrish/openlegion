@@ -69,6 +69,9 @@ def _make_components(tmp_path: str, *, include_v2: bool = False) -> dict:
         credential_vault.list_credential_names.return_value = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
 
         msg_router = MagicMock()
+        msg_router.agent_registry = agent_registry
+        msg_router.register_agent.side_effect = lambda aid, url, **kw: agent_registry.__setitem__(aid, url)
+        msg_router.unregister_agent.side_effect = lambda aid: agent_registry.pop(aid, None)
         msg_router.message_log = []
 
         result.update({

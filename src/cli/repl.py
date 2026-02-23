@@ -148,6 +148,13 @@ class REPLSession:
         self._inline_setup()
         while True:
             try:
+                # Detect agent removed externally (e.g. via dashboard)
+                if self.current and self.current not in self.ctx.agents:
+                    click.echo(f"Agent '{self.current}' is no longer available.")
+                    self.current = None
+                if self.current is None and self.ctx.agents:
+                    self.current = next(iter(self.ctx.agents))
+                    click.echo(f"Now chatting with '{self.current}'.")
                 if self.current:
                     user_input = input(user_prompt(self.current)).strip()
                 else:
@@ -260,8 +267,7 @@ class REPLSession:
             browser_backend=add_browser_backend,
             thinking=add_thinking,
         )
-        self.ctx.router.register_agent(new_name, url)
-        self.ctx.agent_urls[new_name] = url
+        self.ctx.router.register_agent(new_name, url, role=new_desc)
         if isinstance(self.ctx.transport, HttpTransport):
             self.ctx.transport.register(new_name, url)
         click.echo(f"Starting '{new_name}'...")
@@ -741,7 +747,6 @@ class REPLSession:
 
         # Update router and transport
         self.ctx.router.register_agent(name, url)
-        self.ctx.agent_urls[name] = url
         if isinstance(self.ctx.transport, HttpTransport):
             self.ctx.transport.register(name, url)
 
@@ -789,7 +794,6 @@ class REPLSession:
         # Remove from router and transport
         if self.ctx.router:
             self.ctx.router.unregister_agent(name)
-        self.ctx.agent_urls.pop(name, None)
         if isinstance(self.ctx.transport, HttpTransport):
             self.ctx.transport._urls.pop(name, None)
         if self.ctx.health_monitor:

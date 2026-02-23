@@ -226,7 +226,7 @@ class RuntimeContext:
             cost_tracker=self.cost_tracker,
             failover_config=failover_config or None,
         )
-        self.router = MessageRouter(self.permissions, {}, trace_store=self.trace_store)
+        self.router = MessageRouter(self.permissions, self.agent_urls, trace_store=self.trace_store)
         self.orchestrator = Orchestrator(
             mesh_url=f"http://localhost:{mesh_port}",
             blackboard=self.blackboard,
@@ -312,7 +312,6 @@ class RuntimeContext:
                 else:
                     raise
             self.router.register_agent(agent_id, url, role=agent_cfg.get("role", ""))
-            self.agent_urls[agent_id] = url
             if isinstance(self.transport, HttpTransport):
                 self.transport.register(agent_id, url)
             if self.health_monitor:
