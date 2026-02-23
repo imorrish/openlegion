@@ -169,8 +169,8 @@
               <label class="text-[11px] text-gray-500 mb-1 block">Browser</label>
               <select x-model="addAgentForm.browser_backend" class="dash-select w-full">
                 <option value="">Default</option>
-                <template x-for="b in availableBrowsers" :key="b">
-                  <option :value="b" x-text="b"></option>
+                <template x-for="b in (settingsData?.browser_backends || [])" :key="b.name">
+                  <option :value="b.name" x-text="b.label"></option>
                 </template>
               </select>
             </div>
@@ -876,8 +876,8 @@
                       <div>
                         <label class="text-[11px] text-gray-500 mb-1 block">Browser Backend</label>
                         <select x-model="editForm.browser_backend" class="dash-select w-full">
-                          <template x-for="b in availableBrowsers" :key="b">
-                            <option :value="b" x-text="b"></option>
+                          <template x-for="b in (settingsData?.browser_backends || [])" :key="b.name">
+                            <option :value="b.name" x-text="b.label"></option>
                           </template>
                         </select>
                       </div>
