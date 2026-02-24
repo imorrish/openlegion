@@ -73,6 +73,7 @@ function dashboard() {
     bbNewKey: '',
     bbNewValue: '{}',
     bbWriterFilter: '',
+    bbExpanded: {},
 
     // PROJECT.md (fleet-wide)
     projectContent: '',
@@ -120,6 +121,7 @@ function dashboard() {
     _chatAborts: {},           // { agentId: AbortController }
     chatMaxPanels: 3,          // Max simultaneous panels
     chatMinimized: {},         // { agentId: true/false } — minimized state per panel
+    chatUnread: {},            // { agentId: count } — unread notifications while minimized
 
     // Identity panel
     identityTabs: _IDENTITY_TABS,
@@ -259,6 +261,15 @@ function dashboard() {
       return [...new Set(this.bbEntries.map(e => e.written_by))].sort();
     },
 
+    get bbNamespaceCounts() {
+      const counts = {};
+      for (const entry of this.bbEntries) {
+        const ns = this.bbNamespaceOf(entry.key);
+        counts[ns] = (counts[ns] || 0) + 1;
+      }
+      return counts;
+    },
+
     // ── Lifecycle ─────────────────────────────────────────
 
     init() {
@@ -392,9 +403,29 @@ function dashboard() {
         this._debouncedFleetRefresh();
       }
 
-      // Show toast for agent notifications
+      // Show toast for agent notifications + inject into chat panel
       if (evt.type === 'notification' && evt.agent) {
         this.showToast(`[${evt.agent}] ${(evt.data?.message || '').substring(0, 120)}`);
+        if (!this.chatHistories[evt.agent]) this.chatHistories[evt.agent] = [];
+        this.chatHistories[evt.agent].push({
+          role: 'notification',
+          content: evt.data?.message || '',
+          streaming: false,
+          tools: [],
+        });
+        if (this.openChats.includes(evt.agent)) {
+          if (this.chatMinimized[evt.agent]) {
+            // Minimized — badge instead of force-unminimizing
+            this.chatUnread = { ...this.chatUnread, [evt.agent]: (this.chatUnread[evt.agent] || 0) + 1 };
+          } else {
+            this.$nextTick(() => this._scrollChat(evt.agent));
+          }
+        } else if (this.openChats.length < this.chatMaxPanels) {
+          // Room for a new panel — open without stealing focus
+          this.openChats.push(evt.agent);
+          this.$nextTick(() => this._scrollChat(evt.agent));
+        }
+        // else: all panels busy — toast + history entry is enough
       }
 
       // Highlight blackboard writes
@@ -882,6 +913,10 @@ function dashboard() {
       } catch (e) { this.showToast(`Error: ${e.message}`); }
     },
 
+    toggleBbExpand(key) {
+      this.bbExpanded = { ...this.bbExpanded, [key]: !this.bbExpanded[key] };
+    },
+
     // ── V2: Queue fetcher ─────────────────────────────────
 
     async fetchQueues() {
@@ -1028,6 +1063,7 @@ function dashboard() {
       if (this.openChats.includes(agentId)) {
         // Already open — expand if minimized, scroll to latest and focus input
         this.chatMinimized = { ...this.chatMinimized, [agentId]: false };
+        if (this.chatUnread[agentId]) this.chatUnread = { ...this.chatUnread, [agentId]: 0 };
         this.$nextTick(() => {
           this._scrollChat(agentId);
           const input = document.querySelector(`#chat-messages-${agentId}`)
@@ -1612,7 +1648,10 @@ function dashboard() {
       if (diff < 60) return Math.floor(diff) + 's ago';
       if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
       if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-      return Math.floor(diff / 86400) + 'd ago';
+      if (diff < 172800) return 'yesterday';
+      const d = new Date(epoch * 1000);
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return months[d.getMonth()] + ' ' + d.getDate();
     },
 
     formatCost(usd) {
@@ -1634,6 +1673,43 @@ function dashboard() {
       const parts = agentId.replace(/[_-]/g, ' ').trim().split(/\s+/);
       if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
       return agentId.substring(0, 2).toUpperCase();
+    },
+
+    valueSummary(value) {
+      if (value == null) return '';
+      if (typeof value === 'string') return value.length > 120 ? value.substring(0, 117) + '\u2026' : value;
+      if (typeof value !== 'object') return String(value);
+      const fields = ['text', 'summary', 'status', 'message', 'description', 'name', 'result', 'error'];
+      for (const f of fields) {
+        if (value[f] != null && typeof value[f] === 'string') {
+          const s = value[f];
+          return s.length > 120 ? s.substring(0, 117) + '\u2026' : s;
+        }
+      }
+      return this.truncateJson(value);
+    },
+
+    bbNamespaceOf(key) {
+      const idx = key.indexOf('/');
+      return idx === -1 ? '' : key.substring(0, idx + 1);
+    },
+
+    bbNsBadgeClass(key) {
+      const ns = this.bbNamespaceOf(key);
+      const map = {
+        'tasks/': 'ns-tasks',
+        'context/': 'ns-context',
+        'signals/': 'ns-signals',
+        'goals/': 'ns-goals',
+        'artifacts/': 'ns-artifacts',
+        'history/': 'ns-history',
+      };
+      return 'ns-badge ' + (map[ns] || 'ns-default');
+    },
+
+    bbKeyAfterNs(key) {
+      const idx = key.indexOf('/');
+      return idx === -1 ? key : key.substring(idx + 1);
     },
 
     truncateJson(value) {

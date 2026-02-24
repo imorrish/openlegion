@@ -453,23 +453,72 @@ select:focus-visible,
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-/* ── Expandable JSON cell ─────────────────────────── */
+/* ── Namespace badges (blackboard) ────────────────── */
 
-.json-expand {
-  cursor: pointer;
-  transition: max-height 0.3s ease;
-  overflow: hidden;
+.ns-badge {
+  display: inline-block;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  padding: 0.1rem 0.4rem;
+  border-radius: 9999px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.json-expand.collapsed {
-  max-height: 1.5rem;
-}
+.ns-tasks    { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+.ns-context  { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
+.ns-signals  { background: rgba(239, 68, 68, 0.12);  color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+.ns-goals    { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+.ns-artifacts { background: rgba(139, 92, 246, 0.12); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.25); }
+.ns-history  { background: rgba(107, 114, 128, 0.12); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.25); }
+.ns-default  { background: rgba(107, 114, 128, 0.08); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
 
-.json-expand.expanded {
-  max-height: none;
+/* ── Blackboard detail pre block ─────────────────── */
+
+.bb-detail-pre {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(42, 42, 58, 0.5);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  max-height: 20rem;
+  overflow: auto;
   white-space: pre-wrap;
   word-break: break-all;
+  color: #d1d5db;
 }
+
+/* ── Blackboard entry row ────────────────────────── */
+
+.bb-entry-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.bb-entry-row:hover {
+  background: rgba(42, 42, 58, 0.25);
+}
+
+.bb-entry-row.bb-expanded {
+  background: rgba(42, 42, 58, 0.15);
+}
+
+.bb-entry-row.bb-expanded.ns-accent-tasks    { border-left-color: rgba(245, 158, 11, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-context  { border-left-color: rgba(59, 130, 246, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-signals  { border-left-color: rgba(239, 68, 68, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-goals    { border-left-color: rgba(16, 185, 129, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-artifacts { border-left-color: rgba(139, 92, 246, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-history  { border-left-color: rgba(107, 114, 128, 0.5); }
+.bb-entry-row.bb-expanded.ns-accent-default  { border-left-color: rgba(107, 114, 128, 0.3); }
 
 /* ── Heartbeat indicator ──────────────────────────── */
 
