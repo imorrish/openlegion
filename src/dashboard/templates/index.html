@@ -476,11 +476,14 @@
                   ></span>
                 </div>
                 <span class="text-xs font-medium text-white truncate" x-text="chatId"></span>
+                <span x-show="chatMinimized[chatId] && chatUnread[chatId] > 0"
+                  class="flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-[9px] font-bold text-black"
+                  x-text="chatUnread[chatId]"></span>
                 <button x-show="(chatHistories[chatId] || []).length > 0 && !chatMinimized[chatId]" @click.stop="clearChat(chatId)"
                   class="text-[10px] text-gray-600 hover:text-gray-400 transition-colors" title="Clear">Clear</button>
               </div>
               <div class="flex items-center gap-1">
-                <button @click="chatMinimized = { ...chatMinimized, [chatId]: !chatMinimized[chatId] }; if (!chatMinimized[chatId]) $nextTick(() => _scrollChat(chatId))"
+                <button @click="chatMinimized = { ...chatMinimized, [chatId]: !chatMinimized[chatId] }; if (!chatMinimized[chatId]) { chatUnread = { ...chatUnread, [chatId]: 0 }; $nextTick(() => _scrollChat(chatId)); }"
                   class="text-gray-500 hover:text-white text-xs px-1 transition-colors"
                   :title="chatMinimized[chatId] ? 'Expand' : 'Minimize'"
                   :aria-expanded="!chatMinimized[chatId]">
@@ -499,6 +502,7 @@
                       'bg-indigo-600 text-white': msg.role === 'user',
                       'bg-gray-800 text-gray-200': msg.role === 'agent',
                       'bg-red-900/40 text-red-300': msg.role === 'error',
+                      'bg-amber-900/40 text-amber-200 border border-amber-700/50': msg.role === 'notification',
                     }"
                   >
                     <template x-if="msg.tools && msg.tools.length > 0">
@@ -515,6 +519,9 @@
                           </div>
                         </template>
                       </div>
+                    </template>
+                    <template x-if="msg.role === 'notification'">
+                      <div class="text-[9px] font-semibold text-amber-400/70 uppercase tracking-wide mb-0.5">Notification</div>
                     </template>
                     <div class="whitespace-pre-wrap break-words" x-text="msg.content"></div>
                     <span x-show="msg.streaming" class="inline-block w-1 h-3 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom"></span>
@@ -1136,8 +1143,9 @@
           <template x-for="ns in ['tasks/', 'context/', 'signals/', 'goals/', 'artifacts/', 'history/']" :key="ns">
             <button @click="bbPrefix = (bbPrefix === ns ? '' : ns); fetchBlackboard()"
               class="text-[11px] px-2 py-1 rounded-md border transition-all"
-              :class="bbPrefix === ns ? 'border-cyan-500/60 bg-cyan-900/20 text-cyan-300' : 'border-gray-800 text-gray-600 hover:text-gray-400'"
-              x-text="ns"></button>
+              :class="bbPrefix === ns ? 'border-cyan-500/60 bg-cyan-900/20 text-cyan-300' : 'border-gray-800 text-gray-600 hover:text-gray-400'">
+              <span x-text="ns"></span><span x-show="bbNamespaceCounts[ns] > 0" class="ml-1 opacity-60" x-text="'(' + bbNamespaceCounts[ns] + ')'"></span>
+            </button>
           </template>
           <!-- Writer filter -->
           <select x-show="bbWriters.length > 0" x-model="bbWriterFilter"
@@ -1166,40 +1174,48 @@
           </div>
         </div>
         <div class="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="text-gray-500 text-left text-xs uppercase tracking-wider border-b border-gray-800">
-                  <th class="py-3 px-4">Key</th>
-                  <th class="py-3 px-4">Value</th>
-                  <th class="py-3 px-4">Written By</th>
-                  <th class="py-3 px-4">Updated</th>
-                  <th class="py-3 px-4">Ver</th>
-                  <th class="py-3 px-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <template x-for="entry in filteredBbEntries" :key="entry.key">
-                  <tr class="border-b border-gray-800/40 hover:bg-gray-800/30 transition-colors"
-                    :class="bbHighlights.includes(entry.key) ? 'flash-yellow' : ''">
-                    <td class="py-2.5 px-4 font-mono text-xs text-blue-400" x-text="entry.key"></td>
-                    <td class="py-2.5 px-4 max-w-md">
-                      <span class="text-gray-300 text-xs font-mono truncate block cursor-pointer" @click="$el.classList.toggle('truncate'); $el.classList.toggle('whitespace-pre-wrap')" x-text="truncateJson(entry.value)" :title="fullJson(entry.value)"></span>
-                    </td>
-                    <td class="py-2.5 px-4 text-gray-500" x-text="entry.written_by"></td>
-                    <td class="py-2.5 px-4 text-gray-600 text-xs font-mono" x-text="entry.updated_at"></td>
-                    <td class="py-2.5 px-4 text-gray-600 font-mono" x-text="entry.version"></td>
-                    <td class="py-2.5 px-4">
-                      <button
-                        @click="deleteBlackboard(entry.key)"
-                        :disabled="entry.key.startsWith('history/')"
-                        class="text-[10px] px-1.5 py-0.5 rounded text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                      >Del</button>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
+          <div class="divide-y divide-gray-800/40">
+            <template x-for="entry in filteredBbEntries" :key="entry.key">
+              <div :class="bbHighlights.includes(entry.key) ? 'flash-yellow' : ''">
+                <!-- Entry row -->
+                <div class="bb-entry-row"
+                  :class="[
+                    bbExpanded[entry.key] ? 'bb-expanded ns-accent-' + (bbNsBadgeClass(entry.key).split(' ')[1] || 'default').replace('ns-', '') : ''
+                  ]"
+                  @click="toggleBbExpand(entry.key)">
+                  <!-- Agent avatar -->
+                  <div class="agent-avatar agent-avatar-sm flex-shrink-0"
+                    :class="'agent-color-' + agentColorIndex(entry.written_by)"
+                    x-text="agentInitials(entry.written_by)"></div>
+                  <!-- Namespace badge -->
+                  <span x-show="bbNamespaceOf(entry.key)" :class="bbNsBadgeClass(entry.key)"
+                    x-text="bbNamespaceOf(entry.key).replace('/', '')"></span>
+                  <!-- Key (after namespace) -->
+                  <span class="font-mono text-xs text-blue-400 truncate min-w-0" x-text="bbKeyAfterNs(entry.key)"></span>
+                  <!-- Value summary -->
+                  <span class="text-gray-500 text-xs truncate flex-1 min-w-0" x-text="valueSummary(entry.value)"></span>
+                  <!-- Relative time -->
+                  <span class="text-gray-600 text-[11px] whitespace-nowrap flex-shrink-0" x-text="timeAgo(entry.updated_at)"></span>
+                  <!-- Delete button -->
+                  <button
+                    @click.stop="deleteBlackboard(entry.key)"
+                    :disabled="entry.key.startsWith('history/')"
+                    class="text-[10px] px-1.5 py-0.5 rounded text-gray-700 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                  >Del</button>
+                </div>
+                <!-- Expanded detail -->
+                <div x-show="bbExpanded[entry.key]" x-cloak class="px-4 pb-3 pt-1">
+                  <div class="flex items-center gap-3 mb-2 text-[11px] text-gray-500">
+                    <span>Written by <span class="text-gray-400" x-text="entry.written_by"></span></span>
+                    <span class="text-gray-700">&middot;</span>
+                    <span>v<span x-text="entry.version"></span></span>
+                    <span class="text-gray-700">&middot;</span>
+                    <span class="font-mono text-gray-600" x-text="entry.updated_at"></span>
+                  </div>
+                  <pre class="bb-detail-pre custom-scrollbar" x-text="fullJson(entry.value)"></pre>
+                </div>
+              </div>
+            </template>
           </div>
           <!-- Loading -->
           <div x-show="filteredBbEntries.length === 0 && bbLoading" class="text-center py-12" x-cloak>
