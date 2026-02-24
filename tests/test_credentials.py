@@ -84,8 +84,7 @@ async def test_unknown_action_returns_error(monkeypatch):
 # ── Remove credential tests ───────────────────────────────────
 
 
-def test_remove_credential(tmp_path):
-    env_file = str(tmp_path / ".env")
+def test_remove_credential():
     vault = CredentialVault()
     vault.add_credential("test_api_key", "sk-secret")
     assert vault.has_credential("test_api_key")
