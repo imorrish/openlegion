@@ -249,12 +249,13 @@ class CredentialVault:
         "o1": "openai",
         "o3": "openai",
         "o4": "openai",
+        "minimax/": "minimax",
+        "zai/": "zai",
         "xai/": "xai",
         "groq/": "groq",
         "gemini/": "gemini",
         "moonshot/": "moonshot",
         "deepseek/": "deepseek",
-        "minimax/": "minimax",
         "text-embedding-": "openai",
     }
 
