@@ -37,6 +37,7 @@ MODEL_COSTS: dict[str, tuple[float, float]] = {
     "text-embedding-3-small": (0.00002, 0.0),
     "minimax/MiniMax-M2.5": (0.0003, 0.0012),
     "minimax/MiniMax-M2.5-Lightning": (0.0003, 0.0024),
+    "zai/glm-5": (0.001, 0.0032),
 }
 
 _DEFAULT_COST = (0.003, 0.015)  # Conservative fallback
