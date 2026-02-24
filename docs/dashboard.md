@@ -24,7 +24,7 @@ Two sub-views toggled via a tab bar at the top of the panel:
 
 ### Blackboard
 
-Browse, search, write, and delete shared state entries. Filter by key prefix (e.g., `tasks/`, `context/`, `signals/`). Click a value to expand/collapse. New entries are highlighted with a flash animation when written by agents in real-time. History namespace entries (`history/*`) cannot be deleted.
+Browse, search, write, and delete shared state entries. Entries display as expandable card rows with agent avatars, color-coded namespace badges (tasks, context, signals, goals, artifacts, history), a value summary, and relative timestamps. Namespace filter buttons show per-namespace entry counts. Click any row to expand an inline detail panel with full JSON, version number, author, and exact timestamp. Filter by key prefix (e.g., `tasks/`, `context/`, `signals/`) or by writing agent. New entries are highlighted with a flash animation when written by agents in real-time. History namespace entries (`history/*`) cannot be deleted.
 
 ### Costs
 
@@ -109,6 +109,16 @@ Conversation history persists per agent across modal open/close — reopening th
 - **Enter** — send message
 - **Escape** — close chat modal
 
+### Notifications
+
+When an agent calls `notify_user()`, the notification appears inline in the agent's chat panel with amber styling and a "NOTIFICATION" label, in addition to the existing toast and activity feed entry. Behavior adapts to panel state:
+
+- **Panel open and visible** — notification appends to the conversation and auto-scrolls
+- **Panel minimized** — an amber unread badge appears on the minimized header showing the count; expanding the panel clears the badge
+- **Panel not open** — a new panel opens automatically if a slot is available (max 3); if all slots are occupied, the toast and history entry are sufficient — no existing panel is evicted
+
+Notifications never steal keyboard focus or force-unminimize a panel the user deliberately collapsed.
+
 ### Abort
 
 Closing the chat modal (click outside, X button, or Escape) while a response is streaming cancels the in-flight request. The partial response is preserved in history.
@@ -127,7 +137,7 @@ Send a message to all agents simultaneously using the broadcast bar below the ag
 
 ### Delete Entry
 
-Click **Del** on any row. A confirmation dialog prevents accidental deletion. History namespace entries are protected and cannot be deleted.
+Click **Del** on any entry row. History namespace entries are protected and cannot be deleted.
 
 ## Real-Time Updates
 
