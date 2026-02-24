@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 import tempfile
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -243,7 +243,9 @@ class TestHeartbeat:
             config_path=self.config_path, dispatch_fn=dispatch, blackboard=mock_bb,
         )
         job = sched.add_job(agent="test", schedule="every 15m", message="heartbeat", heartbeat=True)
-        result = await sched._execute_job(job)
+        # Mock probes to return nothing triggered (isolate from host disk usage)
+        with patch.object(sched, "_run_heartbeat_probes", return_value=[]):
+            result = await sched._execute_job(job)
         # Skip-LLM optimization: no custom rules, no activity, no probes → skip
         dispatch.assert_not_called()
         assert result is None
@@ -401,7 +403,9 @@ class TestEnrichedHeartbeat:
         job = sched.add_job(
             agent="test", schedule="every 15m", message="heartbeat", heartbeat=True,
         )
-        result = await sched._execute_job(job)
+        # Mock probes to return nothing triggered (isolate from host disk usage)
+        with patch.object(sched, "_run_heartbeat_probes", return_value=[]):
+            result = await sched._execute_job(job)
         assert result is None
         dispatch.assert_not_called()
 
