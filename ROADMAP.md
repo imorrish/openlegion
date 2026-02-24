@@ -403,6 +403,11 @@ Lower priority items grouped by theme. Implement when convenient or when a speci
 
 ## Completed
 
+### Session 24 (Notification Chat Injection + Blackboard UX)
+- [x] **Inline chat notifications** — `notify_user()` calls now appear inside the agent's chat panel with amber styling and a "NOTIFICATION" label, alongside the existing toast and activity feed entry. Notifications respect user intent: minimized panels get an unread badge instead of force-unminimizing, no focus stealing, and no eviction of active streaming panels when all 3 slots are occupied.
+- [x] **Blackboard UI redesign** — Replaced the table layout with expandable card rows featuring color-coded namespace badges (tasks, context, signals, goals, artifacts, history), agent avatars, value summaries, relative timestamps, and inline detail expansion with full JSON, version, and author. Namespace filter buttons show per-namespace entry counts.
+- [x] Updated `docs/dashboard.md` (Blackboard panel, Notifications subsection, Blackboard operations), `README.md` (feature list), and `ROADMAP.md`. PR #133 merged.
+
 ### Session 23 (Parallel Broadcasting + Multi-Agent Chat UX)
 - [x] **Parallel broadcasting** — Replaced sequential `for`/`await` loops with `asyncio.gather(return_exceptions=True)` in 4 fan-out paths: channel `/broadcast` command (`channels/base.py`), pubsub event delivery (`host/server.py`), health check sweep (`host/health.py`), and notification fan-out (`cli/runtime.py`). One agent failure no longer crashes the entire operation.
 - [x] **Streaming broadcast endpoint** — `POST /api/broadcast/stream` SSE endpoint in `dashboard/server.py`. Launches parallel agent streams via `asyncio.create_task`, funnels events through `asyncio.Queue`, yields `agent_start`/`text_delta`/`agent_done`/`all_done` SSE events. Frontend shows per-agent responses as they arrive with progress counter and abort support.
