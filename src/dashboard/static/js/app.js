@@ -143,6 +143,7 @@ function dashboard() {
     broadcastResults: null,
 
     // Credentials
+    showCredForm: false,
     credService: '',
     credKey: '',
     credBaseUrl: '',
@@ -1180,6 +1181,23 @@ function dashboard() {
           this.credService = '';
           this.credKey = '';
           this.credBaseUrl = '';
+          this.showCredForm = false;
+          this.fetchSettings();
+        } else {
+          const err = await resp.json();
+          this.showToast(`Error: ${err.detail}`);
+        }
+      } catch (e) { this.showToast(`Error: ${e.message}`); }
+    },
+
+    async deleteCredential(name) {
+      if (!confirm(`Remove credential "${name}"?`)) return;
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/credentials/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+        });
+        if (resp.ok) {
+          this.showToast(`Credential removed: ${name}`);
           this.fetchSettings();
         } else {
           const err = await resp.json();
