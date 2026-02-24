@@ -256,7 +256,6 @@ class CredentialVault:
         "gemini/": "gemini",
         "moonshot/": "moonshot",
         "deepseek/": "deepseek",
-        "minimax/": "minimax",
         "text-embedding-": "openai",
     }
 

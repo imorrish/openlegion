@@ -30,12 +30,11 @@ MODEL_COSTS: dict[str, tuple[float, float]] = {
     "anthropic/claude-sonnet-4-6": (0.003, 0.015),
     "anthropic/claude-sonnet-4-5-20250929": (0.003, 0.015),
     "anthropic/claude-haiku-4-5-20251001": (0.0008, 0.004),
-    "minimax/MiniMax-M2.5": (0.002, 0.008),
+    "minimax/MiniMax-M2.5": (0.0003, 0.0012),
     "minimax/MiniMax-M2.1": (0.001, 0.005),
     "minimax/MiniMax-M2.1-lightning": (0.0005, 0.002),
     "minimax/MiniMax-M2": (0.001, 0.005),
     "text-embedding-3-small": (0.00002, 0.0),
-    "minimax/MiniMax-M2.5": (0.0003, 0.0012),
     "minimax/MiniMax-M2.5-Lightning": (0.0003, 0.0024),
     "zai/glm-5": (0.001, 0.0032),
 }
