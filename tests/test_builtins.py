@@ -1358,7 +1358,14 @@ class TestBrowserBackendSelection:
 
 # ── labeled screenshots ──────────────────────────────────────
 
+_has_pillow = True
+try:
+    import PIL  # noqa: F401
+except ImportError:
+    _has_pillow = False
 
+
+@pytest.mark.skipif(not _has_pillow, reason="Pillow not installed")
 class TestLabeledScreenshot:
     @pytest.mark.asyncio
     async def test_labeled_false_unchanged(self, tmp_path):

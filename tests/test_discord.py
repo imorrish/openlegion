@@ -13,8 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.channels.base import PairingManager
-from src.channels.discord import DiscordChannel, MAX_DC_LEN
-
+from src.channels.discord import MAX_DC_LEN, DiscordChannel
 
 # ── helpers ────────────────────────────────────────────────────
 
@@ -316,6 +315,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel()
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
@@ -339,6 +339,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel(steer_fn=steer_fn)
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
@@ -356,6 +357,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel(debug_fn=debug_fn)
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
@@ -370,6 +372,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel(steer_fn=None, debug_fn=None)
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
@@ -385,6 +388,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel()
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
@@ -399,6 +403,7 @@ class TestSlashCommandTree:
         ch = _make_discord_channel()
         client = MagicMock()
         client.application_id = None
+        client._connection._command_tree = None
         tree = discord.app_commands.CommandTree(client)
         ch._tree = tree
         ch._register_slash_commands()
