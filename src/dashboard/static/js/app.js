@@ -342,7 +342,6 @@ function dashboard() {
         this.fetchAgents();
         this.fetchQueues();
         this.fetchSettings();
-        this.agents.forEach(a => this.fetchAgentConfig(a.id));
         this._queueInterval = setInterval(() => this.fetchQueues(), 5000);
       }
       if (tab === 'automation') {
@@ -1816,56 +1815,6 @@ function dashboard() {
         minute: '2-digit',
         second: '2-digit',
       });
-    },
-
-    _isOverviewNoiseEvent(evt) {
-      if (!evt) return true;
-      if (evt.type === 'text_delta') return true;
-      if (evt.type === 'agent_state' && evt.data?.state === 'registered') return true;
-      return false;
-    },
-
-    agentAuditPreviewEvents(agentId, limit = 3) {
-      if (!agentId || !Array.isArray(this.events) || this.events.length === 0) return [];
-      const preferred = [];
-      const fallback = [];
-      for (const evt of this.events) {
-        if (evt.agent !== agentId) continue;
-        if (this._isOverviewNoiseEvent(evt)) {
-          if (fallback.length < limit) fallback.push(evt);
-        } else if (preferred.length < limit) {
-          preferred.push(evt);
-        }
-        if (preferred.length >= limit) break;
-      }
-      return preferred.length > 0 ? preferred : fallback;
-    },
-
-    agentLastAuditEvent(agentId) {
-      const rows = this.agentAuditPreviewEvents(agentId, 1);
-      return rows.length ? rows[0] : null;
-    },
-
-    agentActivityStateLabel(agentId) {
-      const state = this.agentStates?.[agentId] || 'idle';
-      const labels = {
-        idle: 'Idle',
-        thinking: 'Thinking',
-        tool: 'Tool run',
-        streaming: 'Responding',
-      };
-      return labels[state] || state;
-    },
-
-    agentActivityStateClass(agentId) {
-      const state = this.agentStates?.[agentId] || 'idle';
-      const map = {
-        thinking: 'agent-audit-state-thinking',
-        tool: 'agent-audit-state-tool',
-        streaming: 'agent-audit-state-streaming',
-        idle: 'agent-audit-state-idle',
-      };
-      return map[state] || 'agent-audit-state-idle';
     },
 
     eventDetail(evt) {

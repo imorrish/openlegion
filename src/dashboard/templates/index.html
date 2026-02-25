@@ -269,14 +269,14 @@
                   </span>
                   <span class="stat-value" x-text="agent.daily_tokens.toLocaleString()"></span>
                 </div>
-                <div class="stat-row" x-show="agentConfigs[agent.id]">
+                <div class="stat-row">
                   <span class="stat-label">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/></svg>
                     Model
                   </span>
-                  <span class="stat-value text-gray-400" x-text="agentConfigs[agent.id]?.model || '-'"></span>
+                  <span class="stat-value text-gray-400" x-text="agent.model || '-'"></span>
                 </div>
-                <div class="stat-row" x-show="queueStatus[agent.id]">
+                <div class="stat-row">
                   <span class="stat-label">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
                     Queue
@@ -292,31 +292,6 @@
                     Restarts
                   </span>
                   <span class="stat-value text-yellow-400" x-text="agent.restarts"></span>
-                </div>
-              </div>
-
-              <!-- Mini container audit preview -->
-              <div class="agent-audit-preview mt-3">
-                <div class="agent-audit-preview-head">
-                  <span>Container activity</span>
-                  <span class="agent-audit-state" :class="agentActivityStateClass(agent.id)" x-text="agentActivityStateLabel(agent.id)"></span>
-                </div>
-                <div class="agent-audit-preview-current" x-show="agentLastAuditEvent(agent.id)">
-                  <span class="event-badge shrink-0" :class="eventColor(agentLastAuditEvent(agent.id)?.type)" x-text="eventTypeLabel(agentLastAuditEvent(agent.id)?.type)"></span>
-                  <span class="agent-audit-preview-summary" x-text="eventSummary(agentLastAuditEvent(agent.id))"></span>
-                  <span class="agent-audit-preview-time" x-text="timeAgo(agentLastAuditEvent(agent.id)?.timestamp)"></span>
-                </div>
-                <div class="agent-audit-preview-list">
-                  <template x-for="(evt, ei) in agentAuditPreviewEvents(agent.id, 3).slice(1)" :key="evt.id || `${agent.id}-audit-${ei}`">
-                    <div class="agent-audit-preview-row">
-                      <span class="agent-audit-preview-dot" :class="eventBgColor(evt.type)"></span>
-                      <span class="truncate text-gray-300" x-text="eventSummary(evt)"></span>
-                      <span class="agent-audit-preview-time" x-text="timeAgo(evt.timestamp)"></span>
-                    </div>
-                  </template>
-                  <div x-show="agentAuditPreviewEvents(agent.id, 1).length === 0" class="agent-audit-preview-empty">
-                    No live events yet in this session
-                  </div>
                 </div>
               </div>
 
