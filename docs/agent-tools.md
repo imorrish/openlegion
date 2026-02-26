@@ -18,13 +18,13 @@ All file operations are scoped to `/data` inside the container. Path traversal i
 |------|-----------|-------------|
 | `read_file` | `path`, `offset`, `limit` | Read file contents with optional pagination |
 | `write_file` | `path`, `content`, `append` | Write or append to a file (creates directories) |
-| `list_files` | `path`, `pattern` | List files with optional glob pattern matching |
+| `list_files` | `path`, `pattern`, `recursive` | List files with optional glob pattern matching (recursive: boolean, default false) |
 
 ### HTTP
 
 | Tool | Parameters | Description |
 |------|-----------|-------------|
-| `http_request` | `url`, `method`, `headers`, `body` | Make HTTP requests (GET/POST/PUT/DELETE/PATCH). Supports `$CRED{name}` handles in URL, headers, and body for credential-blind API calls. Resolved credentials are redacted from responses. |
+| `http_request` | `url`, `method`, `headers`, `body`, `timeout` | Make HTTP requests (GET/POST/PUT/DELETE/PATCH). Supports `$CRED{name}` handles in URL, headers, and body for credential-blind API calls. Resolved credentials are redacted from responses. Timeout default: 30s. |
 
 ### Browser Automation
 
@@ -32,10 +32,10 @@ Four browser backends controlled by `browser_backend` in `config/agents.yaml`:
 
 | Backend | Stack | Anti-Detection | Cost |
 |---------|-------|---------------|------|
-| **basic** (default) | Playwright + Chromium (headless) | Low | Free |
+| **basic** | Playwright + Chromium (headless) | Low | Free |
 | **stealth** | Camoufox (Firefox-based anti-detect) with Xvfb | Medium | Free |
 | **advanced** | Bright Data Scraping Browser via CDP | High (residential proxies, CAPTCHA solving) | Paid |
-| **persistent** | Playwright + Chromium with persistent profile + KasmVNC | Low | Free |
+| **persistent** (default) | Playwright + Chromium with persistent profile + KasmVNC | Low | Free |
 
 The backend is selected per-agent via the `BROWSER_BACKEND` environment variable. All backends expose the same tool interface — downstream tools work identically regardless of backend.
 
@@ -45,7 +45,7 @@ The **persistent** backend maintains a browser profile across sessions at `/data
 |------|-----------|-------------|
 | `browser_navigate` | `url`, `wait_ms` | Open URL, wait, extract page text (default wait: 1000ms). Auto-recovers from dead CDP sessions. |
 | `browser_snapshot` | -- | Accessibility tree snapshot with element refs (e1, e2, ...) |
-| `browser_screenshot` | `filename`, `full_page` | Save screenshot to /data (default: screenshot.png) |
+| `browser_screenshot` | `filename`, `full_page`, `labeled` | Save screenshot to /data (default: screenshot.png). `labeled` overlays numbered labels on interactive elements (default: false). |
 | `browser_click` | `ref` or `selector` | Click element by accessibility ref or CSS selector |
 | `browser_type` | `ref` or `selector`, `text` | Type into input field (supports `$CRED{name}` handles) |
 | `browser_evaluate` | `script` | Run JavaScript in page context |

@@ -275,24 +275,14 @@ Poll directories for new or modified files matching glob patterns. Uses polling 
 
 ### Configuration
 
-Define watchers in `config/watchers.yaml`:
-
-```yaml
-watchers:
-  - path: "/data/inbox"
-    pattern: "*.csv"
-    agent: "researcher"
-    message: "New prospect list uploaded: {filename}. Begin research."
-```
-
-Each watcher entry specifies:
+File watchers are configured programmatically via the `FileWatcher.watch()` method. Each watcher specifies:
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `path` | string | Directory to watch |
 | `pattern` | string | Glob pattern to match files (e.g., `*.csv`, `*.json`) |
 | `agent` | string | Agent to notify when a match is found |
-| `message` | string | Message template (`{filename}` is replaced with the matched file) |
+| `message` | string | Message template (`{filepath}` and `{filename}` are replaced with the matched file's full path and name) |
 
 The watcher polls at a configurable interval, tracks file modification times, and dispatches to the target agent when new or changed files are detected.
 

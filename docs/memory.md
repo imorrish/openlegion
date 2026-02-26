@@ -48,7 +48,7 @@ Manages the LLM's context window to prevent overflow while preserving important 
 - Three compaction thresholds:
   - **60%** -- proactive flush (extract facts to MEMORY.md)
   - **70%** -- auto-compact (summarize + trim to last 4 messages)
-  - **90%** -- emergency hard-prune (keep only first + last 4 messages)
+  - **90%** -- emergency hard-prune (keep first message group + last 4 message groups, where groups respect tool-call boundaries)
 
 ### Write-Then-Compact Pattern
 

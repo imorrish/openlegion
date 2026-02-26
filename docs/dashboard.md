@@ -48,7 +48,7 @@ Environment overview showing configured credentials with tier labels (system or 
 
 ### Edit Agent Config
 
-1. Switch to the **Agents** tab
+1. Switch to the **Fleet** tab
 2. Click **Edit** on an agent card
 3. Modify model, browser backend, role, daily budget, or credential access patterns
 4. Click **Save** -- a toast confirms which fields were updated
@@ -62,7 +62,7 @@ Click the **Restart** button on any agent card. A confirmation dialog prevents a
 
 ### Update Budget
 
-From the agent detail view (click an agent in Agents), budget bars show current daily and monthly usage. Budget can also be updated via the Agents tab edit form.
+From the agent detail view (click an agent in Agents), budget bars show current daily and monthly usage. Budget can also be updated via the Fleet tab edit form.
 
 ## Agent Identity Panel
 
