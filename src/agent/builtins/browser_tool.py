@@ -436,6 +436,15 @@ async def start_persistent_browser():
     os.environ["DISPLAY"] = ":99"
     logger.info("Started KasmVNC Xvnc on :99, web on :%s", listen_port)
 
+    # Start a lightweight window manager so popup windows (e.g. Reddit login)
+    # can be stacked, focused, and managed properly in the VNC session.
+    # Without a WM, popup windows hide behind the main browser window and
+    # subsequent window.open() calls reuse the hidden window silently.
+    subprocess.Popen(
+        ["openbox"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
     # Launch browser (DISPLAY is now set, _launch_persistent skips Xvfb)
     await _get_page()
 

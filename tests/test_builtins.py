@@ -2274,10 +2274,11 @@ class TestPersistentBrowserBackend:
                 await bt.start_persistent_browser()
 
             mock_get.assert_awaited_once()
-            # Single Popen call: KasmVNC Xvnc (no websockify needed)
-            assert len(popen_calls) == 1
+            # Two Popen calls: KasmVNC Xvnc + openbox window manager
+            assert len(popen_calls) == 2
             xvnc_cmd = popen_calls[0]
             assert "Xvnc" in xvnc_cmd[0]
+            assert popen_calls[1] == ["openbox"]
             # Default web port 6080 passed via -websocketPort
             assert "-websocketPort" in xvnc_cmd
             assert "6080" in xvnc_cmd
