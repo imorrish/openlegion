@@ -162,6 +162,58 @@ def test_list_agents(mesh_components):
     assert "qualify" in agents
 
 
+def test_list_agents_scoped_by_project(mesh_components, tmp_path):
+    """When project param is set, only that project's members are returned."""
+    from unittest.mock import patch
+
+    import yaml
+
+    client = mesh_components["client"]
+    router = mesh_components["router"]
+    router.register_agent("alice", "http://localhost:8401")
+    router.register_agent("bob", "http://localhost:8402")
+    router.register_agent("charlie", "http://localhost:8403")
+
+    # Set up project directory
+    projects_dir = tmp_path / "projects"
+    proj_dir = projects_dir / "teamA"
+    proj_dir.mkdir(parents=True)
+    (proj_dir / "metadata.yaml").write_text(
+        yaml.dump({"name": "teamA", "members": ["alice", "bob"]})
+    )
+
+    with patch("src.cli.config.PROJECTS_DIR", projects_dir):
+        # Scoped by project
+        resp = client.get("/mesh/agents", params={"project": "teamA"})
+        assert resp.status_code == 200
+        agents = resp.json()
+        assert "alice" in agents
+        assert "bob" in agents
+        assert "charlie" not in agents
+
+
+def test_list_agents_scoped_by_agent_id(mesh_components):
+    """When agent_id param is set, only that agent is returned."""
+    client = mesh_components["client"]
+    router = mesh_components["router"]
+    router.register_agent("solo", "http://localhost:8401")
+    router.register_agent("other", "http://localhost:8402")
+
+    resp = client.get("/mesh/agents", params={"agent_id": "solo"})
+    assert resp.status_code == 200
+    agents = resp.json()
+    assert "solo" in agents
+    assert "other" not in agents
+
+
+def test_list_agents_unknown_agent_id(mesh_components):
+    """Standalone agent not in registry gets empty dict."""
+    client = mesh_components["client"]
+    resp = client.get("/mesh/agents", params={"agent_id": "ghost"})
+    assert resp.status_code == 200
+    assert resp.json() == {}
+
+
 def test_webhook_integration(tmp_path):
     """Test webhook endpoint triggers orchestrator (without actual agents)."""
     from src.channels.webhook import create_webhook_router

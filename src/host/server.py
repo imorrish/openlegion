@@ -498,13 +498,35 @@ def create_mesh_app(
         return {"sent": True}
 
     @app.get("/mesh/agents")
-    async def list_agents() -> dict:
-        """List all registered agents with their URLs and roles."""
+    async def list_agents(project: str = "", agent_id: str = "") -> dict:
+        """List registered agents, optionally scoped by project or agent_id.
+
+        - project set: return only that project's members
+        - agent_id set (standalone): return only that agent
+        - neither (dashboard/internal): return all
+        """
+        if project:
+            from src.cli.config import _load_projects
+            projects = _load_projects()
+            members = set(projects.get(project, {}).get("members", []))
+            agents = {}
+            for aid, url in router.agent_registry.items():
+                if aid in members:
+                    agents[aid] = {
+                        "url": url,
+                        "role": router.agent_roles.get(aid, ""),
+                    }
+            return agents
+        if agent_id:
+            url = router.agent_registry.get(agent_id)
+            if url:
+                return {agent_id: {"url": url, "role": router.agent_roles.get(agent_id, "")}}
+            return {}
         agents = {}
-        for agent_id, url in router.agent_registry.items():
-            agents[agent_id] = {
+        for aid, url in router.agent_registry.items():
+            agents[aid] = {
                 "url": url,
-                "role": router.agent_roles.get(agent_id, ""),
+                "role": router.agent_roles.get(aid, ""),
             }
         return agents
 

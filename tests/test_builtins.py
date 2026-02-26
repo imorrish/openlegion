@@ -2338,3 +2338,49 @@ class TestPersistentBrowserBackend:
                  patch("asyncio.sleep", new_callable=AsyncMock):
                 with pytest.raises(RuntimeError, match="KasmVNC"):
                     await bt.start_persistent_browser()
+
+
+class TestListAgentsProjectScope:
+    """Tests that list_agents skill passes project scope via MeshClient."""
+
+    @pytest.mark.asyncio
+    async def test_list_agents_project_scope(self):
+        """MeshClient.list_agents passes project param when in a project."""
+        from src.agent.mesh_client import MeshClient
+        client = MeshClient("http://mesh:8420", "bot1", project_name="teamA")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"bot1": {"url": "...", "role": "dev"}}
+        mock_response.raise_for_status = MagicMock()
+        http_client = AsyncMock()
+        http_client.get = AsyncMock(return_value=mock_response)
+        http_client.is_closed = False
+        client._client = http_client
+
+        await client.list_agents()
+
+        http_client.get.assert_called_once()
+        call_kwargs = http_client.get.call_args
+        assert call_kwargs.kwargs.get("params", {}).get("project") == "teamA"
+        assert "agent_id" not in call_kwargs.kwargs.get("params", {})
+
+    @pytest.mark.asyncio
+    async def test_list_agents_standalone_scope(self):
+        """MeshClient.list_agents passes agent_id param when standalone."""
+        from src.agent.mesh_client import MeshClient
+        client = MeshClient("http://mesh:8420", "solo", project_name=None)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"solo": {"url": "...", "role": ""}}
+        mock_response.raise_for_status = MagicMock()
+        http_client = AsyncMock()
+        http_client.get = AsyncMock(return_value=mock_response)
+        http_client.is_closed = False
+        client._client = http_client
+
+        await client.list_agents()
+
+        http_client.get.assert_called_once()
+        call_kwargs = http_client.get.call_args
+        assert call_kwargs.kwargs.get("params", {}).get("agent_id") == "solo"
+        assert "project" not in call_kwargs.kwargs.get("params", {})

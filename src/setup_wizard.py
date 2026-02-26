@@ -42,7 +42,6 @@ class SetupWizard:
         self.config_file = project_root / "config" / "mesh.yaml"
         self.agents_file = project_root / "config" / "agents.yaml"
         self.permissions_file = project_root / "config" / "permissions.json"
-        self.project_file = project_root / "PROJECT.md"
         self.templates_dir = Path(__file__).parent / "templates"
 
     # ── Public entry points ──────────────────────────────────
@@ -239,27 +238,9 @@ class SetupWizard:
         return {"provider": provider, "selected_model": selected_model, "choice": choice}
 
     def _step_project(self, total_steps) -> dict | None:
-        """Step 2: Project definition. Returns None for 'back'."""
-        self._print_step_header(2, total_steps, "Your Project (optional)")
-
-        project_desc = self._prompt_with_back(
-            "  What are you building? (press Enter to skip, 'back' for previous step)",
-            default="",
-            show_default=False,
-        )
-        if project_desc is None:
-            return None
-        if project_desc:
-            self.project_file.write_text(
-                f"# PROJECT.md\n\n"
-                f"## What We're Building\n{project_desc}\n\n"
-                f"## Current Priority\n[Define your current focus]\n\n"
-                f"## Hard Constraints\n[Budget limits, deadlines, compliance rules]\n"
-            )
-            click.echo("  Saved to PROJECT.md. Every agent will see this as their north star.")
-        elif not self.project_file.exists():
-            click.echo("  Skipped. You can define it later by editing PROJECT.md.")
-
+        """Step 2: Project definition (skipped — projects are created from dashboard)."""
+        # Projects are created later from the dashboard or CLI, not during initial setup.
+        # This step is kept as a pass-through to preserve the step numbering flow.
         return {}
 
     def _step_agents(

@@ -43,9 +43,9 @@ async def notify_user(message: str, *, mesh_client=None) -> dict:
 @skill(
     name="list_agents",
     description=(
-        "List all agents currently running in the fleet. Returns each agent's "
-        "name and capabilities. Use this to discover who else is working and "
-        "what artifacts they may have published to the blackboard."
+        "List agents in your project (or just yourself if standalone). Returns "
+        "each agent's name and role. Use this to discover who else is working "
+        "in your project and what artifacts they may have published to the blackboard."
     ),
     parameters={},
 )

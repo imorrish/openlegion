@@ -136,10 +136,16 @@ class MeshClient:
         return response.json()
 
     async def list_agents(self) -> dict:
-        """List all registered agents and their capabilities."""
+        """List agents visible to this agent (project-scoped or self-only)."""
         client = await self._get_client()
+        params: dict[str, str] = {}
+        if self.project_name:
+            params["project"] = self.project_name
+        else:
+            params["agent_id"] = self.agent_id
         response = await client.get(
             f"{self.mesh_url}/mesh/agents",
+            params=params,
             headers=self._trace_headers(),
         )
         response.raise_for_status()
