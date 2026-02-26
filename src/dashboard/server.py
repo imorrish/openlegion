@@ -779,7 +779,81 @@ def create_dashboard_router(
             })
         return {"projects": result}
 
-    # ── Fleet-wide PROJECT.md ───────────────────────────────
+    @api_router.post("/api/projects")
+    async def api_projects_create(request: Request) -> dict:
+        """Create a new project."""
+        from src.cli.config import _create_project, _load_config
+        body = await request.json()
+        name = body.get("name", "").strip()
+        description = sanitize_for_prompt(body.get("description", "")).strip()
+        members = body.get("members", [])
+        if not name:
+            raise HTTPException(status_code=400, detail="name is required")
+        if not isinstance(members, list):
+            raise HTTPException(status_code=400, detail="members must be a list")
+        # Validate that member agents exist in the config
+        cfg = _load_config()
+        known_agents = set(cfg.get("agents", {}).keys())
+        unknown = [m for m in members if m not in known_agents]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown agents: {', '.join(unknown)}")
+        try:
+            _create_project(name, description=description, members=members)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"created": True, "name": name}
+
+    @api_router.delete("/api/projects/{name}")
+    async def api_projects_delete(name: str) -> dict:
+        """Delete a project and release its members."""
+        from src.cli.config import _delete_project
+        try:
+            _delete_project(name)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        return {"deleted": True, "name": name}
+
+    @api_router.post("/api/projects/{name}/members")
+    async def api_projects_add_member(name: str, request: Request) -> dict:
+        """Add a member agent to a project."""
+        from src.cli.config import _add_agent_to_project
+        body = await request.json()
+        agent = body.get("agent", "").strip()
+        if not agent:
+            raise HTTPException(status_code=400, detail="agent is required")
+        try:
+            _add_agent_to_project(name, agent)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        # Auto-restart the agent so new scope takes effect
+        restarted = False
+        if transport is not None and agent in agent_registry:
+            try:
+                await transport.request(agent, "POST", "/restart", timeout=10)
+                restarted = True
+            except Exception as e:
+                logger.warning("Failed to restart agent %s after project change: %s", agent, e)
+        return {"added": True, "project": name, "agent": agent, "restarted": restarted}
+
+    @api_router.delete("/api/projects/{name}/members/{agent}")
+    async def api_projects_remove_member(name: str, agent: str) -> dict:
+        """Remove a member agent from a project."""
+        from src.cli.config import _remove_agent_from_project
+        try:
+            _remove_agent_from_project(name, agent)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        # Auto-restart the agent so new scope takes effect
+        restarted = False
+        if transport is not None and agent in agent_registry:
+            try:
+                await transport.request(agent, "POST", "/restart", timeout=10)
+                restarted = True
+            except Exception as e:
+                logger.warning("Failed to restart agent %s after project change: %s", agent, e)
+        return {"removed": True, "project": name, "agent": agent, "restarted": restarted}
+
+    # ── Project PROJECT.md ─────────────────────────────────
 
     def _resolve_project_path(project: str) -> Path:
         """Validate project name and return path to its project.md."""
@@ -792,22 +866,23 @@ def create_dashboard_router(
 
     @api_router.get("/api/project")
     async def api_project_read(project: str = "") -> dict:
-        """Read a project's project.md, or the global PROJECT.md."""
+        """Read a project's project.md. Requires a project name."""
+        if not project:
+            raise HTTPException(status_code=400, detail="project parameter is required")
         if runtime is None:
             raise HTTPException(status_code=503, detail="Runtime not available")
-        if project:
-            project_path = _resolve_project_path(project)
-            if not project_path.parent.exists():
-                raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
-        else:
-            project_path = runtime.project_root / "PROJECT.md"
+        project_path = _resolve_project_path(project)
+        if not project_path.parent.exists():
+            raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
         exists = project_path.exists()
         content = project_path.read_text(errors="replace")[:200_000] if exists else ""
-        return {"content": content, "exists": exists, "project": project or None}
+        return {"content": content, "exists": exists, "project": project}
 
     @api_router.put("/api/project")
     async def api_project_write(request: Request, project: str = "") -> dict:
         """Write project.md to host and push to running agents."""
+        if not project:
+            raise HTTPException(status_code=400, detail="project parameter is required")
         if runtime is None:
             raise HTTPException(status_code=503, detail="Runtime not available")
         body = await request.json()
@@ -816,22 +891,17 @@ def create_dashboard_router(
             raise HTTPException(status_code=400, detail="content must be a string")
         content = sanitize_for_prompt(content)
 
-        if project:
-            project_path = _resolve_project_path(project)
-            if not project_path.parent.exists():
-                raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
-        else:
-            project_path = runtime.project_root / "PROJECT.md"
+        project_path = _resolve_project_path(project)
+        if not project_path.parent.exists():
+            raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
         project_path.write_text(content)
 
-        # Push to relevant agents only (project members or all for global)
-        push_targets = list(agent_registry.keys())
-        if project:
-            from src.cli.config import _load_projects
-            projects_data = _load_projects()
-            pdata = projects_data.get(project, {})
-            members = set(pdata.get("members", []))
-            push_targets = [a for a in push_targets if a in members]
+        # Push to project members only
+        from src.cli.config import _load_projects
+        projects_data = _load_projects()
+        pdata = projects_data.get(project, {})
+        members = set(pdata.get("members", []))
+        push_targets = [a for a in agent_registry.keys() if a in members]
 
         push_results = {}
         if transport is not None and push_targets:
@@ -845,7 +915,7 @@ def create_dashboard_router(
                     )
                     return aid, True
                 except Exception as e:
-                    logger.warning(f"Failed to push PROJECT.md to {aid}: {e}")
+                    logger.warning("Failed to push PROJECT.md to %s: %s", aid, e)
                     return aid, False
 
             tasks = [_push(aid) for aid in push_targets]

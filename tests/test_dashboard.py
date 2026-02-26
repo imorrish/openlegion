@@ -1453,6 +1453,161 @@ class TestDashboardProjectAPI:
         assert data["project"] == "alpha"
         assert "Alpha Project" in data["content"]
 
+    def test_project_read_requires_project_param(self):
+        """GET /api/project without project param returns 400."""
+        resp = self.client.get("/dashboard/api/project")
+        assert resp.status_code == 400
+        assert "required" in resp.json()["detail"]
+
+    def test_project_write_requires_project_param(self):
+        """PUT /api/project without project param returns 400."""
+        resp = self.client.put("/dashboard/api/project", json={"content": "hello"})
+        assert resp.status_code == 400
+        assert "required" in resp.json()["detail"]
+
+
+class TestDashboardProjectCRUD:
+    """Tests for project CRUD endpoints."""
+
+    def setup_method(self):
+        import yaml
+        self._tmpdir = tempfile.mkdtemp()
+        self.components = _make_components(self._tmpdir, include_v2=True)
+        self.components["runtime"].project_root = MagicMock()
+        self.client = _make_client(self.components)
+
+        # Create projects dir and a config with known agents
+        self._projects_dir = os.path.join(self._tmpdir, "projects")
+        os.makedirs(self._projects_dir, exist_ok=True)
+
+        self._config_dir = os.path.join(self._tmpdir, "config")
+        os.makedirs(self._config_dir, exist_ok=True)
+        self._config_file = os.path.join(self._config_dir, "mesh.yaml")
+        with open(self._config_file, "w") as f:
+            yaml.dump({"agents": {"alpha": {"role": "test"}, "beta": {"role": "test"}}}, f)
+
+        self._agents_file = os.path.join(self._config_dir, "agents.yaml")
+        with open(self._agents_file, "w") as f:
+            yaml.dump({"alpha": {"role": "test"}, "beta": {"role": "test"}}, f)
+
+    def teardown_method(self):
+        _teardown(self.components)
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_create_project(self):
+        """POST /api/projects creates a project directory."""
+        from pathlib import Path
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)), \
+             patch("src.cli.config.CONFIG_FILE", Path(self._config_file)), \
+             patch("src.cli.config.AGENTS_FILE", Path(self._agents_file)), \
+             patch("src.cli.config.PERMISSIONS_FILE", Path(self._tmpdir) / "perms.json"):
+            resp = self.client.post("/dashboard/api/projects", json={
+                "name": "myproject",
+                "description": "A test project",
+                "members": [],
+            })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] is True
+        assert data["name"] == "myproject"
+        assert os.path.isdir(os.path.join(self._projects_dir, "myproject"))
+
+    def test_create_project_empty_name(self):
+        """POST /api/projects with empty name returns 400."""
+        resp = self.client.post("/dashboard/api/projects", json={
+            "name": "",
+            "description": "test",
+        })
+        assert resp.status_code == 400
+
+    def test_create_project_unknown_members(self):
+        """POST /api/projects with unknown member agents returns 400."""
+        from pathlib import Path
+        with patch("src.cli.config.CONFIG_FILE", Path(self._config_file)), \
+             patch("src.cli.config.AGENTS_FILE", Path(self._agents_file)):
+            resp = self.client.post("/dashboard/api/projects", json={
+                "name": "proj",
+                "members": ["nonexistent"],
+            })
+        assert resp.status_code == 400
+        assert "Unknown agents" in resp.json()["detail"]
+
+    def test_delete_project(self):
+        """DELETE /api/projects/{name} removes the project."""
+        from pathlib import Path
+
+        import yaml
+        # Create a project first
+        proj_dir = os.path.join(self._projects_dir, "doomed")
+        os.makedirs(proj_dir)
+        with open(os.path.join(proj_dir, "metadata.yaml"), "w") as f:
+            yaml.dump({"name": "doomed", "members": []}, f)
+
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)), \
+             patch("src.cli.config.PERMISSIONS_FILE", Path(self._tmpdir) / "perms.json"):
+            resp = self.client.delete("/dashboard/api/projects/doomed")
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+        assert not os.path.exists(proj_dir)
+
+    def test_delete_project_not_found(self):
+        """DELETE /api/projects/{name} for nonexistent project returns 404."""
+        from pathlib import Path
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)):
+            resp = self.client.delete("/dashboard/api/projects/ghost")
+        assert resp.status_code == 404
+
+    def test_add_member(self):
+        """POST /api/projects/{name}/members adds an agent to the project."""
+        from pathlib import Path
+
+        import yaml
+        proj_dir = os.path.join(self._projects_dir, "team")
+        os.makedirs(proj_dir)
+        with open(os.path.join(proj_dir, "metadata.yaml"), "w") as f:
+            yaml.dump({"name": "team", "members": []}, f)
+
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)), \
+             patch("src.cli.config.PERMISSIONS_FILE", Path(self._tmpdir) / "perms.json"):
+            resp = self.client.post("/dashboard/api/projects/team/members", json={"agent": "alpha"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["added"] is True
+        assert data["agent"] == "alpha"
+        assert "restarted" in data
+        assert isinstance(data["restarted"], bool)
+
+    def test_add_member_missing_agent(self):
+        """POST /api/projects/{name}/members without agent returns 400."""
+        resp = self.client.post("/dashboard/api/projects/team/members", json={})
+        assert resp.status_code == 400
+
+    def test_remove_member(self):
+        """DELETE /api/projects/{name}/members/{agent} removes the agent."""
+        from pathlib import Path
+
+        import yaml
+        proj_dir = os.path.join(self._projects_dir, "team")
+        os.makedirs(proj_dir, exist_ok=True)
+        with open(os.path.join(proj_dir, "metadata.yaml"), "w") as f:
+            yaml.dump({"name": "team", "members": ["alpha"]}, f)
+
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)), \
+             patch("src.cli.config.PERMISSIONS_FILE", Path(self._tmpdir) / "perms.json"):
+            resp = self.client.delete("/dashboard/api/projects/team/members/alpha")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["removed"] is True
+        assert "restarted" in data
+        assert isinstance(data["restarted"], bool)
+
+    def test_remove_member_not_found(self):
+        """DELETE /api/projects/{name}/members/{agent} for nonexistent project returns 400."""
+        from pathlib import Path
+        with patch("src.cli.config.PROJECTS_DIR", Path(self._projects_dir)):
+            resp = self.client.delete("/dashboard/api/projects/ghost/members/alpha")
+        assert resp.status_code == 400
+
 
 class TestDashboardAgentProjectField:
     """Tests for project field in /api/agents response."""

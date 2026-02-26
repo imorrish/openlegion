@@ -81,7 +81,7 @@ function dashboard() {
     bbWriterFilter: '',
     bbExpanded: {},
 
-    // PROJECT.md (fleet-wide or per-project)
+    // PROJECT.md (per-project only)
     projectContent: '',
     projectExists: false,
     projectLoading: false,
@@ -93,6 +93,12 @@ function dashboard() {
     projects: [],
     activeProject: null,
     projectsLoaded: false,
+
+    // Project management
+    showProjectForm: false,
+    newProjectName: '',
+    newProjectDesc: '',
+    projectFormLoading: false,
 
     // Costs
     costData: {},
@@ -917,10 +923,15 @@ function dashboard() {
     },
 
     async fetchProject() {
+      if (!this.activeProject) {
+        this.projectContent = '';
+        this.projectExists = false;
+        this.projectLoading = false;
+        return;
+      }
       this.projectLoading = true;
       try {
-        const qs = this.activeProject ? `?project=${encodeURIComponent(this.activeProject)}` : '';
-        const resp = await fetch(`${window.__config.apiBase}/project${qs}`);
+        const resp = await fetch(`${window.__config.apiBase}/project?project=${encodeURIComponent(this.activeProject)}`);
         if (resp.ok) {
           const data = await resp.json();
           this.projectContent = data.content || '';
@@ -931,10 +942,10 @@ function dashboard() {
     },
 
     async saveProject() {
+      if (!this.activeProject) return;
       this.projectSaving = true;
       try {
-        const qs = this.activeProject ? `?project=${encodeURIComponent(this.activeProject)}` : '';
-        const resp = await fetch(`${window.__config.apiBase}/project${qs}`, {
+        const resp = await fetch(`${window.__config.apiBase}/project?project=${encodeURIComponent(this.activeProject)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: this.projectEditBuffer }),
@@ -947,8 +958,7 @@ function dashboard() {
           this.projectEditBuffer = '';
           const pushed = Object.values(data.pushed || {}).filter(Boolean).length;
           const total = Object.keys(data.pushed || {}).length;
-          const scope = this.activeProject ? `${this.activeProject} ` : '';
-          this.showToast(`${scope}PROJECT.md saved${total > 0 ? ` (pushed to ${pushed}/${total} agents)` : ''}`);
+          this.showToast(`${this.activeProject} PROJECT.md saved${total > 0 ? ` (pushed to ${pushed}/${total} agents)` : ''}`);
         } else {
           try {
             const err = await resp.json();
@@ -985,9 +995,107 @@ function dashboard() {
       this.activeProject = name;
       this.projectEditing = false;
       this.projectEditBuffer = '';
+      this.projectBannerExpanded = false;
       this.broadcastResults = null;
       this.broadcastSentMessage = '';
+      this.showProjectForm = false;
       this.fetchProject();
+    },
+
+    async createProject() {
+      const name = this.newProjectName.trim();
+      if (!name) return;
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name)) {
+        this.showToast('Project name must start with a letter or number and contain only letters, numbers, hyphens, underscores');
+        return;
+      }
+      this.projectFormLoading = true;
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/projects`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: this.newProjectDesc.trim(), members: [] }),
+        });
+        if (resp.ok) {
+          this.newProjectName = '';
+          this.newProjectDesc = '';
+          this.showProjectForm = false;
+          await this.fetchProjects();
+          this.switchProject(name);
+          this.showToast(`Project "${name}" created`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Create failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (e) { this.showToast(`Create failed: ${e.message}`); }
+      this.projectFormLoading = false;
+    },
+
+    async deleteProject(name) {
+      if (!confirm(`Delete project "${name}"? Members will become standalone.`)) return;
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/projects/${encodeURIComponent(name)}`, {
+          method: 'DELETE',
+        });
+        if (resp.ok) {
+          this.projectEditing = false;
+          this.projectEditBuffer = '';
+          await this.fetchProjects();
+          if (this.activeProject === name) this.switchProject(null);
+          this.showToast(`Project "${name}" deleted`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Delete failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (e) { this.showToast(`Delete failed: ${e.message}`); }
+    },
+
+    async addMember(project, agent) {
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/projects/${encodeURIComponent(project)}/members`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent }),
+        });
+        if (resp.ok) {
+          await this.fetchProjects();
+          this.fetchAgents();
+          this.showToast(`${agent} added to ${project}`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Add failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (e) { this.showToast(`Add failed: ${e.message}`); }
+    },
+
+    async removeMember(project, agent) {
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/projects/${encodeURIComponent(project)}/members/${encodeURIComponent(agent)}`, {
+          method: 'DELETE',
+        });
+        if (resp.ok) {
+          await this.fetchProjects();
+          this.fetchAgents();
+          this.showToast(`${agent} removed from ${project}`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Remove failed: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (e) { this.showToast(`Remove failed: ${e.message}`); }
+    },
+
+    /** Agents in the registry that are not in any project. */
+    get unassignedAgents() {
+      const assigned = new Set();
+      for (const p of this.projects) {
+        for (const m of (p.members || [])) assigned.add(m);
+      }
+      return this.agents.filter(a => !assigned.has(a.id));
+    },
+
+    /** Get the active project object. */
+    get activeProjectData() {
+      return this.projects.find(p => p.name === this.activeProject) || null;
     },
 
     async fetchBlackboard() {
@@ -1838,8 +1946,8 @@ function dashboard() {
       // Quick actions
       const actions = [
         { label: 'Add Agent', desc: 'Open add agent form', keywords: ['add', 'agent', 'new', 'create'], action: () => { this.switchTab('fleet'); this.addAgentMode = true; this.fetchSettings(); } },
-        { label: 'Broadcast', desc: 'Send message to all agents', keywords: ['broadcast', 'send', 'all', 'message'], action: () => { this.switchTab('fleet'); this.$nextTick(() => { const el = document.querySelector('[x-model="broadcastMessage"]'); if (el) el.focus(); }); } },
-        { label: 'Edit PROJECT.md', desc: 'Edit project context' + (this.activeProject ? ` (${this.activeProject})` : ' (fleet-wide)'), keywords: ['project', 'edit', 'context'], action: () => { this.switchTab('fleet'); this.projectBannerExpanded = true; this.startProjectEdit(); } },
+        { label: 'Broadcast', desc: this.activeProject ? `Broadcast to ${this.activeProject} agents` : 'Send message to all agents', keywords: ['broadcast', 'send', 'all', 'message'], action: () => { this.switchTab('fleet'); this.$nextTick(() => { const el = document.querySelector('[x-model="broadcastMessage"]'); if (el) el.focus(); }); } },
+        ...(this.activeProject ? [{ label: 'Edit PROJECT.md', desc: `Edit ${this.activeProject} project context`, keywords: ['project', 'edit', 'context'], action: () => { this.switchTab('fleet'); this.projectBannerExpanded = true; this.startProjectEdit(); } }] : []),
       ];
       for (const act of actions) {
         if (act.keywords.some(kw => kw.includes(q)) || act.label.toLowerCase().includes(q)) {

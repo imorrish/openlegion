@@ -498,15 +498,38 @@ def create_mesh_app(
         return {"sent": True}
 
     @app.get("/mesh/agents")
-    async def list_agents() -> dict:
-        """List all registered agents with their URLs and roles."""
-        agents = {}
-        for agent_id, url in router.agent_registry.items():
-            agents[agent_id] = {
-                "url": url,
-                "role": router.agent_roles.get(agent_id, ""),
+    async def list_agents(project: str = "", agent_id: str = "") -> dict:
+        """List registered agents, optionally scoped by project or agent_id.
+
+        - project set: return only that project's members
+        - agent_id set (standalone): return only that agent
+        - neither (dashboard/internal): return all
+        """
+        def _agent_entry(aid: str, url: str) -> dict:
+            return {"url": url, "role": router.agent_roles.get(aid, "")}
+
+        if project:
+            from src.cli.config import _load_projects
+            projects = _load_projects()
+            pdata = projects.get(project)
+            if pdata is None:
+                _server_logger.warning("list_agents: unknown project %r", project)
+                return {}
+            members = set(pdata.get("members", []))
+            return {
+                aid: _agent_entry(aid, url)
+                for aid, url in router.agent_registry.items()
+                if aid in members
             }
-        return agents
+        if agent_id:
+            url = router.agent_registry.get(agent_id)
+            if url:
+                return {agent_id: _agent_entry(agent_id, url)}
+            return {}
+        return {
+            aid: _agent_entry(aid, url)
+            for aid, url in router.agent_registry.items()
+        }
 
     # === Agent Introspection ===
 
@@ -537,11 +560,26 @@ def create_mesh_app(
             result["budget"] = cost_tracker.check_budget(agent_id)
 
         if section in ("fleet", "all"):
-            result["fleet"] = [
-                {"id": aid, "role": router.agent_roles.get(aid, "")}
-                for aid in router.agent_registry
-                if permissions.can_message(agent_id, aid) or aid == agent_id
-            ]
+            # Scope fleet list by project: project agents see only peers,
+            # standalone agents see only themselves.
+            from src.cli.config import _load_projects
+            _projects = _load_projects()
+            _agent_project_members: set[str] | None = None
+            for _pdata in _projects.values():
+                if agent_id in _pdata.get("members", []):
+                    _agent_project_members = set(_pdata["members"])
+                    break
+
+            if _agent_project_members is not None:
+                result["fleet"] = [
+                    {"id": aid, "role": router.agent_roles.get(aid, "")}
+                    for aid in router.agent_registry
+                    if aid in _agent_project_members
+                ]
+            else:
+                result["fleet"] = [
+                    {"id": agent_id, "role": router.agent_roles.get(agent_id, "")}
+                ]
 
         if section in ("cron", "all") and cron_scheduler:
             result["cron"] = [

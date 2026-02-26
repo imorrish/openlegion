@@ -53,7 +53,9 @@ class TestSandboxBackend:
         """Workspace directory is created with expected structure."""
         project_root = tmp_path / "project"
         project_root.mkdir()
-        (project_root / "PROJECT.md").write_text("# Test Project")
+        # Create a project-specific PROJECT.md (not global)
+        project_md = tmp_path / "project_context.md"
+        project_md.write_text("# Test Project")
 
         skills_src = project_root / "skills" / "alpha"
         skills_src.mkdir(parents=True)
@@ -64,7 +66,7 @@ class TestSandboxBackend:
         backend.mesh_host_port = 8420
         backend.agents = {}
         backend.auth_tokens = {}
-        backend.extra_env = {}
+        backend.extra_env = {"PROJECT_MD_PATH": str(project_md)}
         backend._workspace_root = tmp_path / ".openlegion" / "agents"
         backend._workspace_root.mkdir(parents=True)
 
@@ -88,6 +90,28 @@ class TestSandboxBackend:
         assert "LLM_MODEL=openai/gpt-4o-mini" in env_content
         assert "MESH_AUTH_TOKEN=" in env_content
         assert "alpha" in backend.auth_tokens
+
+    def test_prepare_workspace_standalone_no_project_md(self, tmp_path):
+        """Standalone agents (no PROJECT_MD_PATH) get no PROJECT.md."""
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        # Even if global PROJECT.md exists, standalone agents don't get it
+        (project_root / "PROJECT.md").write_text("# Global")
+
+        backend = SandboxBackend.__new__(SandboxBackend)
+        backend.project_root = project_root
+        backend.mesh_host_port = 8420
+        backend.agents = {}
+        backend.auth_tokens = {}
+        backend.extra_env = {}
+        backend._workspace_root = tmp_path / ".openlegion" / "agents"
+        backend._workspace_root.mkdir(parents=True)
+
+        ws = backend._prepare_workspace(
+            agent_id="solo", role="test", skills_dir="",
+            system_prompt="", model="",
+        )
+        assert not (ws / "PROJECT.md").exists()
 
     def test_prepare_workspace_browser_backend(self, tmp_path):
         """browser_backend config is passed as BROWSER_BACKEND env var."""

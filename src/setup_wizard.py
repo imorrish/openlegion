@@ -42,7 +42,6 @@ class SetupWizard:
         self.config_file = project_root / "config" / "mesh.yaml"
         self.agents_file = project_root / "config" / "agents.yaml"
         self.permissions_file = project_root / "config" / "permissions.json"
-        self.project_file = project_root / "PROJECT.md"
         self.templates_dir = Path(__file__).parent / "templates"
 
     # ── Public entry points ──────────────────────────────────
@@ -99,7 +98,7 @@ class SetupWizard:
                 click.echo("Setup cancelled. Existing config kept.")
                 return
 
-        total_steps = 4
+        total_steps = 3
         # State accumulated across steps
         state: dict = {}
 
@@ -114,13 +113,6 @@ class SetupWizard:
                 step = 2
 
             elif step == 2:
-                result = self._step_project(total_steps)
-                if result is None:
-                    step = 1
-                    continue
-                step = 3
-
-            elif step == 3:
                 result = self._step_agents(
                     total_steps,
                     state["selected_model"],
@@ -130,17 +122,17 @@ class SetupWizard:
                     _setup_agent_wizard,
                 )
                 if result is None:
-                    step = 2
+                    step = 1
                     continue
                 state["created_agents"] = result["created_agents"]
-                step = 4
+                step = 3
 
-            elif step == 4:
+            elif step == 3:
                 result = self._step_collaboration(total_steps, _set_collaborative_permissions)
                 if result is None:
-                    step = 3
+                    step = 2
                     continue
-                step = 5
+                step = 4
 
         # Summary
         self._print_summary(state["provider"], state["selected_model"], state.get("created_agents", []))
@@ -238,36 +230,12 @@ class SetupWizard:
 
         return {"provider": provider, "selected_model": selected_model, "choice": choice}
 
-    def _step_project(self, total_steps) -> dict | None:
-        """Step 2: Project definition. Returns None for 'back'."""
-        self._print_step_header(2, total_steps, "Your Project (optional)")
-
-        project_desc = self._prompt_with_back(
-            "  What are you building? (press Enter to skip, 'back' for previous step)",
-            default="",
-            show_default=False,
-        )
-        if project_desc is None:
-            return None
-        if project_desc:
-            self.project_file.write_text(
-                f"# PROJECT.md\n\n"
-                f"## What We're Building\n{project_desc}\n\n"
-                f"## Current Priority\n[Define your current focus]\n\n"
-                f"## Hard Constraints\n[Budget limits, deadlines, compliance rules]\n"
-            )
-            click.echo("  Saved to PROJECT.md. Every agent will see this as their north star.")
-        elif not self.project_file.exists():
-            click.echo("  Skipped. You can define it later by editing PROJECT.md.")
-
-        return {}
-
     def _step_agents(
         self, total_steps, selected_model, _load_config, _load_templates,
         _apply_template, _setup_agent_wizard,
     ) -> dict | None:
-        """Step 3: Agent setup. Returns None for 'back'."""
-        self._print_step_header(3, total_steps, "Your Agents")
+        """Step 2: Agent setup. Returns None for 'back'."""
+        self._print_step_header(2, total_steps, "Your Agents")
 
         cfg = _load_config()
         existing_agents = list(cfg.get("agents", {}).keys())
@@ -324,8 +292,8 @@ class SetupWizard:
         return {"created_agents": created_agents}
 
     def _step_collaboration(self, total_steps, _set_collaborative_permissions) -> dict | None:
-        """Step 4: Collaboration (auto-completes, no user prompt)."""
-        self._print_step_header(4, total_steps, "Collaboration")
+        """Step 3: Collaboration (auto-completes, no user prompt)."""
+        self._print_step_header(3, total_steps, "Collaboration")
 
         mesh_cfg = {}
         if self.config_file.exists():
