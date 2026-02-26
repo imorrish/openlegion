@@ -9,7 +9,7 @@ OpenLegion is a container-isolated multi-agent runtime. LLM-powered agents run i
 ## Architecture (read this first)
 
 ```
-User (CLI REPL / Telegram / Discord / Webhook)
+User (CLI REPL / Telegram / Discord / Slack / WhatsApp / Webhook)
   → Mesh Host (FastAPI :8420) — routes messages, enforces permissions, proxies APIs
     → Agent Containers (FastAPI :8400 each) — isolated execution with private memory
 ```
@@ -23,7 +23,7 @@ Three trust zones: **User** (full trust), **Mesh** (trusted coordinator), **Agen
 | `src/shared/types.py` | THE contract — all Pydantic models shared between host and agents |
 | `src/agent/loop.py` | Agent execution loop (task mode + chat mode) |
 | `src/agent/skills.py` | Skill registry and tool discovery |
-| `src/agent/builtins/` | Built-in tools (exec, file, browser, memory, mesh, web search) |
+| `src/agent/builtins/` | Built-in tools (exec, file, http, browser, memory, mesh, web search, vault, introspect, skill, subagent) |
 | `src/agent/memory.py` | Per-agent SQLite + sqlite-vec + FTS5 memory store |
 | `src/agent/workspace.py` | Persistent markdown workspace (MEMORY.md, daily logs, learnings) |
 | `src/agent/context.py` | Context window management (write-then-compact) |
@@ -41,11 +41,22 @@ Three trust zones: **User** (full trust), **Mesh** (trusted coordinator), **Agen
 | `src/host/cron.py` | Cron scheduler with heartbeat support |
 | `src/host/failover.py` | Model health tracking + failover chains |
 | `src/host/traces.py` | Request tracing + grouped summaries |
-| `src/host/transcript.py` | Conversation transcript formatting |
+| `src/host/transcript.py` | Provider-specific transcript sanitization |
 | `src/host/webhooks.py` | Named webhook endpoints |
 | `src/host/watchers.py` | File watcher with polling |
-| `src/host/containers.py` | Docker image build + management |
+| `src/host/containers.py` | Backward-compat alias for `DockerBackend` |
 | `src/channels/base.py` | Abstract channel with unified REPL-like UX |
+| `src/channels/telegram.py` | Telegram bot channel adapter |
+| `src/channels/discord.py` | Discord bot channel adapter |
+| `src/channels/slack.py` | Slack channel adapter (Socket Mode) |
+| `src/channels/whatsapp.py` | WhatsApp Cloud API channel adapter |
+| `src/channels/webhook.py` | HTTP webhook channel adapter |
+| `src/agent/server.py` | Agent container FastAPI server |
+| `src/agent/mesh_client.py` | Agent-side HTTP client for mesh communication |
+| `src/agent/loop_detector.py` | Tool loop detection with escalating responses |
+| `src/agent/mcp_client.py` | MCP tool server client and lifecycle |
+| `src/agent/__main__.py` | Agent container entry point |
+| `src/shared/trace.py` | Distributed trace-ID generation and propagation |
 | `src/setup_wizard.py` | Interactive setup wizard with validation |
 | `src/marketplace.py` | Git-based skill marketplace (install/remove) |
 | `src/dashboard/server.py` | Dashboard FastAPI router + API |
@@ -77,27 +88,27 @@ Three trust zones: **User** (full trust), **Mesh** (trusted coordinator), **Agen
 
 4. **Path traversal protection in agent file tools.** Agent file operations are confined to `/data` inside the container. The `file_tool.py` tools must validate paths. Never expose host filesystem paths to agents.
 
-5. **Container hardening is not optional.** Agents run as non-root (UID 1000), with `no-new-privileges`, memory limits (512MB), and CPU quotas. Don't weaken these defaults.
+5. **Container hardening is not optional.** Agents run as non-root (UID 1000), with `no-new-privileges`, memory limits (512MB, or 1GB for persistent-browser agents), and CPU quotas. Don't weaken these defaults.
 
-6. **All untrusted text is sanitized before reaching LLM context.** `sanitize_for_prompt()` in `src/shared/utils.py` strips invisible Unicode (bidi overrides, tag chars, zero-width chars, variation selectors, etc.) at three choke points: user input (`server.py`), tool results (`loop.py`), and system prompt context (`loop.py`). New paths from untrusted text to LLM context must call `sanitize_for_prompt()`. Never bypass these layers.
+6. **All untrusted text is sanitized before reaching LLM context.** `sanitize_for_prompt()` in `src/shared/utils.py` strips invisible Unicode (bidi overrides, tag chars, zero-width chars, variation selectors, etc.) at multiple choke points: user input (`src/agent/server.py`), tool results and system prompt context (`src/agent/loop.py`), workspace loading (`src/agent/workspace.py`), mesh tools (`src/agent/builtins/mesh_tool.py`), and dashboard input (`src/dashboard/server.py`). New paths from untrusted text to LLM context must call `sanitize_for_prompt()`. Never bypass these layers.
 
 ### Architectural invariants
 
-6. **`src/shared/types.py` is the contract.** Every message, event, and state object crossing component boundaries is a Pydantic model defined here. When adding new inter-component communication, add the model here first. Agents and mesh share ONLY these types.
+7. **`src/shared/types.py` is the contract.** Every message, event, and state object crossing component boundaries is a Pydantic model defined here. When adding new inter-component communication, add the model here first. Agents and mesh share ONLY these types.
 
-7. **Fleet model, not hierarchy.** There is no CEO agent that routes or delegates. Users talk to agents directly. Agents coordinate through the blackboard (shared state) and YAML workflows (deterministic DAGs). Do not introduce agent-to-agent direct messaging patterns that bypass the mesh.
+8. **Fleet model, not hierarchy.** There is no CEO agent that routes or delegates. Users talk to agents directly. Agents coordinate through the blackboard (shared state) and YAML workflows (deterministic DAGs). Do not introduce agent-to-agent direct messaging patterns that bypass the mesh.
 
-8. **Bounded execution.** Agent loops have hard limits: 20 iterations for tasks (`AgentLoop.MAX_ITERATIONS`), 30 tool rounds for chat (`CHAT_MAX_TOOL_ROUNDS`). Token budgets are enforced per task. These prevent runaway agents. Do not remove these limits.
+9. **Bounded execution.** Agent loops have hard limits: 20 iterations for tasks (`AgentLoop.MAX_ITERATIONS`), 30 tool rounds for chat (`CHAT_MAX_TOOL_ROUNDS`). Token budgets are enforced per task. These prevent runaway agents. Do not remove these limits.
 
-9. **Write-then-compact.** Before discarding any conversation context, important facts are flushed to `MEMORY.md` via the workspace (`src/agent/context.py`). No information should be silently lost during context management.
+10. **Write-then-compact.** Before discarding any conversation context, important facts are flushed to `MEMORY.md` via the workspace (`src/agent/context.py`). No information should be silently lost during context management.
 
-10. **LLM tool-calling message roles must alternate correctly.** The sequence is: `user → assistant(tool_calls) → tool(result) → assistant`. Never split a tool_call from its tool results. The `_trim_context` method in `loop.py` groups them to preserve this invariant. Breaking this causes LLM API errors.
+11. **LLM tool-calling message roles must alternate correctly.** The sequence is: `user → assistant(tool_calls) → tool(result) → assistant`. Never split a tool_call from its tool results. The `_trim_context` method in `loop.py` groups them to preserve this invariant. Breaking this causes LLM API errors.
 
 ## Code Patterns
 
 ### How we write code here
 
-- **Small modules.** No file exceeds ~800 lines. If a module grows past that, split it by responsibility.
+- **Small modules.** Keep modules focused by responsibility. If a module grows large, consider splitting it.
 - **Pydantic for boundaries, plain dicts internally.** Cross-component messages use Pydantic models. Internal data flow within a module can use dicts.
 - **Async by default.** Agent-side code is async (FastAPI + asyncio). Use `async def` for any I/O. Blocking calls must be wrapped in `run_in_executor`.
 - **SQLite for all state.** Blackboard, agent memory, cost tracking, cron — all SQLite with WAL mode. No Redis, no external databases. Always set `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` on new connections.
@@ -203,7 +214,9 @@ pytest tests/test_loop.py -x -v
 | `src/shared/types.py` | `tests/test_types.py` |
 | `src/shared/utils.py` (sanitization) | `tests/test_sanitize.py` |
 | `src/cli/` | `tests/test_cli_commands.py`, `tests/test_setup_wizard.py` |
-| Cross-component | `tests/test_integration.py`, `tests/test_events.py` |
+| `src/cli/config.py` (projects) | `tests/test_projects.py` |
+| `src/dashboard/events.py` | `tests/test_events.py` |
+| Cross-component | `tests/test_integration.py` |
 
 ## Common Mistakes to Avoid
 
@@ -211,7 +224,7 @@ pytest tests/test_loop.py -x -v
 - **Polling for task completion.** Prefer push-based patterns (agent posts result back to mesh) over polling loops. The current `_wait_for_task_result` in orchestrator.py is a known area for improvement.
 - **Breaking tool-call message grouping.** When trimming context, never separate an `assistant` message with `tool_calls` from its corresponding `tool` result messages. The `_trim_context` method handles this — respect the grouping pattern.
 - **Putting secrets in agent code.** Agents run in untrusted containers. API keys, tokens, credentials — all belong in the vault. LLM provider keys use `OPENLEGION_SYSTEM_*` (system tier, never agent-accessible); agent tool keys use `OPENLEGION_CRED_*` (agent tier). Both are loaded by `credentials.py`. New service integrations go through the vault proxy.
-- **Using global mutable state.** The `_skill_staging` global in `skills.py` is a known issue. Avoid adding new module-level mutable globals. Pass state through constructors.
+- **Using global mutable state.** The `_skill_staging` global in `skills.py` is protected by a threading lock but is still a module-level mutable global. Avoid adding new module-level mutable globals. Pass state through constructors.
 - **Overly broad exception handling.** Don't `except Exception: pass`. Log the error. Distinguish transient errors (network timeouts, rate limits — retry with backoff) from permanent errors (invalid input, missing config — fail fast).
 - **Monolithic functions.** When adding features, prefer composable components over growing existing functions. Extract classes with clear lifecycle (init, start, stop). See `src/cli/runtime.py:RuntimeContext` and `src/cli/repl.py:REPLSession` as examples.
 
@@ -221,4 +234,4 @@ pytest tests/test_loop.py -x -v
 - **The mesh is the only door.** Agents have no external network access except through the mesh. This is a feature, not a limitation — it enables credential isolation, cost tracking, and permission enforcement in one place.
 - **Private by default, shared by promotion.** Agents keep knowledge in private memory. Facts are explicitly promoted to the blackboard when they should be shared. Don't default to sharing everything.
 - **Skills over features.** New agent capabilities should be added as skills (Python functions with `@skill` decorator), not as changes to the core loop. The loop is the execution engine; skills are the capabilities. Keep them separate.
-- **Smallest thing that works.** No LangChain, no Redis, no Kubernetes, no web UI. Every dependency must justify its existence. SQLite handles all state. Docker handles all isolation. Three-line BM25 search beats a vector database dependency for 90% of use cases.
+- **Smallest thing that works.** No LangChain, no Redis, no Kubernetes. Every dependency must justify its existence. SQLite handles all state. Docker handles all isolation. The web dashboard (`src/dashboard/`) is a lightweight Alpine.js SPA — no React, no build step. Three-line BM25 search beats a vector database dependency for 90% of use cases.

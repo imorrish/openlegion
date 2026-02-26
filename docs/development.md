@@ -84,7 +84,9 @@ pytest tests/ -x
 | `src/shared/types.py` | `tests/test_types.py` |
 | `src/shared/utils.py` (sanitization) | `tests/test_sanitize.py` |
 | `src/cli/` | `tests/test_cli_commands.py`, `tests/test_setup_wizard.py` |
-| Cross-component | `tests/test_integration.py`, `tests/test_events.py` |
+| `src/cli/config.py` (projects) | `tests/test_projects.py` |
+| `src/dashboard/events.py` | `tests/test_events.py` |
+| Cross-component | `tests/test_integration.py` |
 
 ### Testing Conventions
 
@@ -96,12 +98,15 @@ async def _make_loop(tool_calls=None, text="Done"):
     llm.chat.return_value = LLMResponse(
         content=text,
         tool_calls=tool_calls or [],
-        usage={"prompt_tokens": 10, "completion_tokens": 5},
+        tokens_used=100,
     )
     loop = AgentLoop(
         agent_id="test",
-        llm_client=llm,
-        skill_registry=mock_skills,
+        role="test",
+        memory=mock_memory,
+        skills=mock_skills,
+        llm=llm,
+        mesh_client=mock_mesh,
     )
     return loop
 ```
@@ -118,11 +123,11 @@ mesh_client.read_blackboard.return_value = {"key": "value"}
 **SQLite in-memory for tests.** Use `":memory:"` or `tmp_path` for databases:
 
 ```python
-def test_memory_store(tmp_path):
+async def test_memory_store(tmp_path):
     store = MemoryStore(db_path=str(tmp_path / "test.db"))
-    store.save("user_name", "Alice")
-    results = store.recall("name")
-    assert results[0]["value"] == "Alice"
+    await store.store_fact(key="user_name", value="Alice")
+    results = await store.search("name", top_k=5)
+    assert results[0].value == "Alice"
 ```
 
 **Every new feature gets tests.** New tools, endpoints, and channel logic all need coverage.
@@ -131,7 +136,7 @@ def test_memory_store(tmp_path):
 
 ### Module Structure
 
-- Small modules, ~800 lines max
+- Keep modules focused by responsibility
 - Async by default (`async def` for any I/O)
 - `TYPE_CHECKING` imports for circular dependency prevention
 - Logging via `setup_logging("component.module")`
@@ -333,7 +338,7 @@ openlegion/
 │   ├── permissions.json
 │   ├── cron.json
 │   └── workflows/
-├── tests/                       # Test suite (1276 tests)
+├── tests/                       # Test suite (1368 tests)
 │   └── fixtures/                # Test fixtures (echo MCP server, etc.)
 ├── Dockerfile.agent             # Agent container image
 └── pyproject.toml               # Project metadata

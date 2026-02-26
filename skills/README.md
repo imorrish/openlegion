@@ -40,13 +40,6 @@ async def my_tool(query: str, limit: int = 5, *, mesh_client=None):
 - Parameters without a `"default"` key are required.
 - The `description` is what the LLM reads to decide when to use the tool.
 
-## Example Skills in This Directory
-
-The skills in `research/`, `qualify/`, and `outreach/` are **stub examples**
-showing the pattern for different use cases. They route through the mesh API
-proxy but the external services (Apollo, Hunter, etc.) require API keys
-configured in your `.env` file.
-
 ## Built-in Tools
 
 Every agent automatically has access to built-in tools defined in
@@ -56,6 +49,9 @@ Every agent automatically has access to built-in tools defined in
 - `read_file`, `write_file`, `list_files` — File I/O
 - `http_request` — HTTP requests
 - `browser_navigate`, `browser_screenshot`, etc. — Browser automation
-- `memory_search`, `memory_save` — Persistent memory
-- `delegate_task`, `list_agents`, `send_message` — Team coordination
+- `memory_search`, `memory_save`, `memory_recall` — Persistent memory
+- `list_agents`, `spawn_agent`, `spawn_subagent`, `notify_user`, `publish_event` — Team coordination
 - `read_shared_state`, `write_shared_state`, `list_shared_state` — Shared blackboard
+- `vault_generate_secret`, `vault_capture_from_page`, `vault_list`, `vault_status` — Credential vault
+- `introspect` — Runtime state queries
+- `create_skill`, `reload_skills` — Self-extension

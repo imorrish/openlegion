@@ -6,9 +6,9 @@
 </h3>
 <div align="center">
    
-[![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE.md)
+[![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-orange.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
-[![Tests: 1276](https://img.shields.io/badge/tests-1276%20passing-brightgreen)](https://github.com/openlegion-ai/openlegion/actions/workflows/test.yml)
+[![Tests: 1368](https://img.shields.io/badge/tests-1368%20passing-brightgreen)](https://github.com/openlegion-ai/openlegion/actions/workflows/test.yml)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mXNkjpDvvr)
 [![Twitter](https://img.shields.io/badge/Twitter-@openlegion-1DA1F2?logo=x&logoColor=white)](https://x.com/openlegion)
 [![LiteLLM](https://img.shields.io/badge/LLM-100%2B%20providers-orange.svg)](https://litellm.ai)
@@ -116,8 +116,8 @@ OpenLegion was designed from day one assuming agents will be compromised.
 | **Cost controls** | None | Per-agent daily + monthly budget caps |
 | **Multi-agent routing** | LLM CEO agent | Deterministic YAML DAG workflows |
 | **LLM providers** | Broad | 100+ via LiteLLM with health-tracked failover |
-| **Test coverage** | Minimal | 1276 tests including full Docker E2E |
-| **Codebase size** | 430,000+ lines | ~21,000 lines — auditable in a day |
+| **Test coverage** | Minimal | 1368 tests including full Docker E2E |
+| **Codebase size** | 430,000+ lines | ~22,000 lines — auditable in a day |
 
 ---
 
@@ -131,7 +131,7 @@ Chat with your agent fleet via **Telegram**, **Discord**, **Slack**, **WhatsApp*
 via cron schedules, webhooks, heartbeat monitoring, and file watchers — without being
 prompted.
 
-**1276 tests passing** across **~21,000 lines** of application code.
+**1368 tests passing** across **~22,000 lines** of application code.
 **Fully auditable in a day.**
 No LangChain. No Redis. No Kubernetes. No CEO agent. BSL License.
 
@@ -261,8 +261,7 @@ and token usage is recorded after each response.
 
 Configurable failover chains cascade across LLM providers transparently.
 `ModelHealthTracker` applies exponential cooldown per model (transient errors:
-60s → 300s → 1500s, billing/auth errors: 1h). Permanent errors (400, 404)
-don't cascade. Streaming failover is supported — if a connection fails mid-stream,
+60s → 300s → 1500s, billing/auth errors: 1h). Streaming failover is supported — if a connection fails mid-stream,
 the next model in the chain picks up.
 
 ### Permission Matrix
@@ -358,7 +357,7 @@ structured output and optional blackboard promotions.
 ### Chat Mode (`chat`)
 
 Accepts a user message. On the first message, loads workspace context
-(AGENTS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md) into the system prompt,
+(PROJECT.md, AGENTS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md) into the system prompt,
 injects a live Runtime Context block (permissions, budget, fleet, cron),
 and searches memory for relevant facts. Executes tool calls in a bounded loop
 (max 30 rounds) and runs context compaction when needed.
@@ -540,14 +539,9 @@ curl -X POST http://localhost:8420/webhook/hook/hook_a1b2c3d4 \
 Poll directories for new/modified files matching glob patterns. Uses polling
 (not inotify) for Docker volume compatibility.
 
-```yaml
-# config/watchers.yaml
-watchers:
-  - path: "/data/inbox"
-    pattern: "*.csv"
-    agent: "researcher"
-    message: "New prospect list uploaded: {filename}. Begin research."
-```
+File watchers are configured programmatically via the `FileWatcher.watch()` method,
+specifying a directory path, glob pattern, target agent, and message template
+(supports `{filepath}` and `{filename}` placeholders).
 
 ---
 
@@ -631,6 +625,14 @@ openlegion [--version]
 │   ├── list                                    # List installed marketplace skills
 │   └── remove <name> [--yes]                   # Remove an installed skill
 │
+├── project
+│   ├── create <name>                          # Create a new project
+│   ├── list                                    # List all projects and members
+│   ├── delete <name> [--yes]                  # Delete a project
+│   ├── add-agent <project> <agent>            # Add an agent to a project
+│   ├── remove-agent <project> <agent>         # Remove an agent from a project
+│   └── edit <name>                            # Edit project description
+│
 └── channels
     ├── add [telegram|discord|slack|whatsapp]  # Connect a messaging channel
     ├── list                                    # Show configured channels
@@ -654,6 +656,7 @@ openlegion [--version]
 /queue                               Show agent task queue status
 /workflow [list|run]                 List or trigger workflows
 /cron [list|del|pause|resume|run]    Manage cron jobs
+/project [list|create|delete|...]    Manage multi-project namespaces
 /debug [trace]                       Show recent request traces
 /addkey <svc> [key]                  Add an API credential to the vault
 /removekey [name]                    Remove a credential from the vault
@@ -704,10 +707,8 @@ mesh:
   port: 8420
 
 llm:
-  default_model: "openai/gpt-4.1-mini"
+  default_model: "openai/gpt-4o-mini"
   embedding_model: "text-embedding-3-small"
-  max_tokens: 4096
-  temperature: 0.7
 ```
 
 ### `config/agents.yaml` — Agent Definitions
@@ -720,8 +721,8 @@ agents:
     role: "research"
     model: "openai/gpt-4.1-mini"
     skills_dir: "./skills/research"
-    system_prompt: "You are a research specialist..."
-    browser_backend: "stealth"          # basic (default), stealth, advanced, or persistent
+    instructions: "You are a research specialist..."
+    browser_backend: "stealth"          # persistent (default), basic, stealth, or advanced
     thinking: "medium"                   # off (default), low, medium, or high
     resources:
       memory_limit: "512m"
@@ -852,12 +853,12 @@ pytest tests/
 
 | Category | Tests | What's Tested |
 |----------|-------|---------------|
-| Built-in Tools | 133 | exec, file, browser (all 4 backends, screenshots, reset/recovery, KasmVNC), memory, mesh, vault, introspect, path traversal, discovery |
-| Dashboard | 93 | Fleet management, blackboard, costs, traces, queues, cron, settings, config, streaming broadcast, workspace proxy |
+| Built-in Tools | 145 | exec, file, browser (all 4 backends, screenshots, reset/recovery, KasmVNC), memory, mesh, vault, introspect, path traversal, discovery |
+| Dashboard | 104 | Fleet management, blackboard, costs, traces, queues, cron, settings, config, streaming broadcast, workspace proxy |
 | Workspace | 68 | File scaffold, loading, BM25 search, daily logs, learnings, heartbeat, identity files, SYSTEM.md |
 | Agent Loop | 67 | Task execution, tool calling, cancellation, tool memory, chat helpers, daily log enrichment, task logging |
 | Credentials | 67 | Vault, API proxy, provider detection, two-tier system, credential lifecycle |
-| CLI | 65 | Agent add/list/edit/remove, chat, REPL commands, cron management, version |
+| CLI | 80 | Agent add/list/edit/remove, chat, REPL commands, cron management, version |
 | Channels (base) | 47 | Abstract channel, commands, per-user routing, chunking, steer, debug, addkey normalization, parallel broadcast |
 | Cron | 44 | Cron expressions, intervals, dispatch, persistence, enriched heartbeat, skip-LLM, concurrent mutations |
 | Mesh | 42 | Blackboard, PubSub, MessageRouter, permissions |
@@ -866,10 +867,11 @@ pytest tests/
 | Discord Channel | 36 | Slash commands, message routing, pairing, chunking, embed formatting |
 | Memory Store | 34 | SQLite ops, vector search, categories, hierarchical search, tool outcomes |
 | Context Manager | 34 | Token estimation (tiktoken + model-aware), compaction, flushing, flush reset |
-| Runtime Backend | 33 | DockerBackend, SandboxBackend, browser_backend, extra_env, name sanitization, detection, selection |
+| Runtime Backend | 34 | DockerBackend, SandboxBackend, browser_backend, extra_env, name sanitization, detection, selection |
+| Projects | 30 | Multi-project CRUD, config, agent membership |
 | Events | 31 | Event streaming, filtering, WebSocket, notification events |
 | Traces | 30 | Trace recording, grouping, summaries, prompt preview extraction |
-| Orchestrator | 26 | Workflows, conditions, retries, failures |
+| Orchestrator | 32 | Workflows, conditions, retries, failures |
 | Transcript | 24 | Transcript formatting, safety, round-trip fidelity |
 | WhatsApp Channel | 22 | Cloud API, webhook verification, message chunking, non-text reply |
 | Agent Server | 21 | Workspace API, heartbeat-context endpoint, content sanitization, file allowlist |
@@ -896,7 +898,7 @@ pytest tests/
 | Memory Tools | 6 | memory_search, memory_save, memory_recall |
 | Memory Integration | 6 | Vector search, cross-task recall, salience |
 | E2E | 17 | Container health, workflow, chat, memory, triggering |
-| **Total** | **1276** | |
+| **Total** | **1368** | |
 
 ---
 
@@ -919,9 +921,9 @@ pytest tests/
 | mcp | MCP tool server client (in container only, optional) |
 | slack-bolt | Slack channel adapter (optional) |
 
-Dev: pytest, pytest-asyncio, ruff.
+Dev: pytest, pytest-asyncio, pytest-cov, ruff.
 
-No LangChain. No Redis. No Kubernetes. Real-time web dashboard at `/dashboard`.
+No LangChain. No Redis. No Kubernetes. Real-time web dashboard at `/dashboard`. Optional channels: `python-telegram-bot`, `discord.py`, `slack-bolt`.
 
 ---
 
@@ -969,7 +971,7 @@ src/
 │   ├── failover.py                     # Model health tracking + failover chains
 │   ├── runtime.py                      # RuntimeBackend ABC + Docker/Sandbox backends
 │   ├── transport.py                    # Transport ABC + Http/Sandbox transports
-│   ├── containers.py                   # Docker image build + management
+│   ├── containers.py                   # Backward-compat alias for DockerBackend
 │   ├── cron.py                         # Cron scheduler + heartbeats
 │   ├── webhooks.py                     # Named webhook endpoints
 │   ├── watchers.py                     # File watchers (polling)
@@ -977,7 +979,7 @@ src/
 │   ├── health.py                       # Health monitor + auto-restart
 │   ├── lanes.py                        # Per-agent FIFO task queues
 │   ├── traces.py                       # Request tracing + grouped summaries
-│   └── transcript.py                   # Conversation transcript formatting
+│   └── transcript.py                   # Provider-specific transcript sanitization
 ├── shared/
 │   ├── types.py                        # All Pydantic models (the contract)
 │   ├── utils.py                        # ID generation, logging, sanitization
@@ -994,6 +996,8 @@ src/
 │   ├── events.py                       # EventBus for real-time streaming
 │   ├── templates/index.html            # Dashboard UI (Alpine.js + Tailwind)
 │   └── static/                         # CSS + JS assets
+├── setup_wizard.py                    # Guided setup wizard
+├── marketplace.py                     # Skill marketplace (git-based install/remove)
 └── templates/
     ├── starter.yaml                    # Single-agent template
     ├── sales.yaml                      # Sales pipeline team
@@ -1004,6 +1008,7 @@ config/
 ├── mesh.yaml                           # Framework settings
 ├── agents.yaml                         # Agent definitions (per-project)
 ├── permissions.json                    # Per-agent ACLs
+├── projects/                           # Multi-project namespaces
 └── workflows/                          # Workflow YAML definitions
 ```
 
@@ -1017,7 +1022,7 @@ config/
 | The mesh is the only door | No agent has network access except through the mesh. No agent holds credentials. |
 | Private by default, shared by promotion | Agents keep knowledge private. Facts are explicitly promoted to the blackboard. |
 | Explicit failure handling | Every workflow step declares what happens on failure. No silent error swallowing. |
-| Small enough to audit | ~21,000 total lines. The entire codebase is auditable in a day. |
+| Small enough to audit | ~22,000 total lines. The entire codebase is auditable in a day. |
 | Skills over features | New capabilities are agent skills, not mesh or orchestrator code. |
 | SQLite for all state | Single-file databases. No external services. WAL mode for concurrent reads. |
 | Zero vendor lock-in | LiteLLM supports 100+ providers. Markdown workspace files. No proprietary formats. |
@@ -1032,7 +1037,7 @@ You may view, modify, and self-host the software.
 
 You may NOT offer it as a competing hosted or SaaS product.
 
-See [LICENSE](LICENSE). for details.
+See [LICENSE](LICENSE) for details.
 
 ---
 
@@ -1050,7 +1055,7 @@ Looking for alternatives? OpenLegion is often compared to:
 
 OpenLegion differs from all of these in combining **fleet orchestration,
 Docker isolation, credential vaulting, and cost enforcement** in a single
-~21,000 line auditable codebase.
+~22,000 line auditable codebase.
 
 **Keywords:** autonomous AI agents, multi-agent framework, LLM agent orchestration,
 self-hosted AI agents, Docker AI agents, OpenClaw alternative, AI agent security,
