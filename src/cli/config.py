@@ -436,14 +436,13 @@ def _get_default_model() -> str:
 
 def _validate_project_name(name: str) -> str:
     """Validate and return a safe project name (same rules as agent names)."""
-    import re
-
-    if not name or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name):
+    try:
+        return _validate_agent_name(name)
+    except ValueError:
         raise ValueError(
             f"Invalid project name '{name}': must be 1–64 alphanumeric chars, "
             "hyphens, or underscores (must start with a letter or digit)."
         )
-    return name
 
 
 def _load_projects() -> dict[str, dict]:

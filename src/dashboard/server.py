@@ -760,18 +760,22 @@ def create_dashboard_router(
 
     # ── Fleet-wide PROJECT.md ───────────────────────────────
 
+    def _resolve_project_path(project: str) -> Path:
+        """Validate project name and return path to its project.md."""
+        from src.cli.config import PROJECTS_DIR, _validate_project_name
+        try:
+            _validate_project_name(project)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid project name")
+        return PROJECTS_DIR / project / "project.md"
+
     @api_router.get("/api/project")
     async def api_project_read(project: str = "") -> dict:
         """Read a project's project.md, or the global PROJECT.md."""
         if runtime is None:
             raise HTTPException(status_code=503, detail="Runtime not available")
         if project:
-            from src.cli.config import PROJECTS_DIR, _validate_project_name
-            try:
-                _validate_project_name(project)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid project name")
-            project_path = PROJECTS_DIR / project / "project.md"
+            project_path = _resolve_project_path(project)
         else:
             project_path = runtime.project_root / "PROJECT.md"
         exists = project_path.exists()
@@ -790,12 +794,7 @@ def create_dashboard_router(
         content = sanitize_for_prompt(content)
 
         if project:
-            from src.cli.config import PROJECTS_DIR, _validate_project_name
-            try:
-                _validate_project_name(project)
-            except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid project name")
-            project_path = PROJECTS_DIR / project / "project.md"
+            project_path = _resolve_project_path(project)
             if not project_path.parent.exists():
                 raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
         else:

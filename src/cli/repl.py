@@ -624,7 +624,7 @@ class REPLSession:
 
         def _project_key(key: str) -> str:
             """Prefix key with project namespace when active."""
-            if self._active_project and not key.startswith("projects/") and not key.startswith("--all"):
+            if self._active_project and not key.startswith("projects/"):
                 return f"projects/{self._active_project}/{key}"
             return key
 

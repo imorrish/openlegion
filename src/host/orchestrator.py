@@ -180,17 +180,20 @@ class Orchestrator:
         self._cancelled.add(execution_id)
         return True
 
-    def _load_workflows(self, workflows_dir: str) -> None:
-        """Load all workflow YAML files."""
+    def _load_workflows(self, workflows_dir: str, *, namespace: str = "") -> None:
+        """Load workflow YAML files, optionally namespacing as namespace/name."""
         wf_path = Path(workflows_dir)
         if not wf_path.exists():
-            logger.debug("No workflows directory at %s — skipping", workflows_dir)
+            if not namespace:
+                logger.debug("No workflows directory at %s — skipping", workflows_dir)
             return
         for yaml_file in wf_path.glob("*.yaml"):
             try:
                 with open(yaml_file) as f:
                     data = yaml.safe_load(f)
                 wf = WorkflowDefinition(**data)
+                if namespace:
+                    wf.name = f"{namespace}/{wf.name}"
                 self.workflows[wf.name] = wf
                 logger.info(f"Loaded workflow: {wf.name}")
             except Exception as e:
@@ -198,20 +201,7 @@ class Orchestrator:
 
     def load_project_workflows(self, project_name: str, workflows_dir: str) -> None:
         """Load workflows from a project directory, namespacing as project/workflow."""
-        wf_path = Path(workflows_dir)
-        if not wf_path.exists():
-            return
-        for yaml_file in wf_path.glob("*.yaml"):
-            try:
-                with open(yaml_file) as f:
-                    data = yaml.safe_load(f)
-                wf = WorkflowDefinition(**data)
-                namespaced = f"{project_name}/{wf.name}"
-                wf.name = namespaced
-                self.workflows[namespaced] = wf
-                logger.info(f"Loaded project workflow: {namespaced}")
-            except Exception as e:
-                logger.error(f"Failed to load project workflow {yaml_file}: {e}")
+        self._load_workflows(workflows_dir, namespace=project_name)
 
     @staticmethod
     def _detect_cycle(steps: list[WorkflowStep]) -> list[str] | None:
