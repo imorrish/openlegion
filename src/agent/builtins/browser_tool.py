@@ -1,14 +1,13 @@
-"""Browser automation via Patchright / Playwright / Camoufox.
+"""Browser automation via Playwright / Camoufox.
 
 Provides browser access for web scraping, testing, and interaction.
 A single browser instance is lazily initialized per agent process and reused.
 Supports four backends via BROWSER_BACKEND env var:
 basic, stealth, advanced, persistent.
 
-The persistent backend uses Patchright (Playwright fork that patches CDP
-leaks like Runtime.enable) with real Google Chrome (not Chromium) for
-authentic TLS fingerprints.  The stealth backend uses Camoufox (patched
-Firefox).
+The persistent backend uses Playwright Chromium with stealth flags and a
+JS init script for anti-detection.  The stealth backend uses Camoufox
+(patched Firefox).
 """
 
 from __future__ import annotations
@@ -206,18 +205,73 @@ async def _launch_advanced(mesh_client):
     return browser, context, page
 
 
-# Minimal init script for Patchright + real Chrome.
-# Real Chrome already has genuine navigator.plugins, chrome.runtime,
-# navigator.webdriver=undefined, etc.  Overriding these with shallow fakes
-# is counterproductive — anti-bot deep inspection detects the inconsistency.
-# Only clean up automation globals that Patchright/Playwright may inject.
 _STEALTH_INIT_SCRIPT = """
-// Clean up automation globals that Patchright/Playwright inject
+// Hide navigator.webdriver — backup for --disable-blink-features flag.
+Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined, configurable: true,
+});
+
+// Fake chrome.runtime (real Chrome has this, Playwright doesn't)
+if (!window.chrome) window.chrome = {};
+if (!window.chrome.runtime) {
+    window.chrome.runtime = {
+        connect: () => {},
+        sendMessage: () => {},
+        onMessage: {addListener: () => {}, removeListener: () => {}},
+        onConnect: {addListener: () => {}, removeListener: () => {}},
+    };
+}
+
+// Fake plugins array (automation Chromium reports empty)
+Object.defineProperty(navigator, 'plugins', {
+    get: () => {
+        const p = [
+            {name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer',
+             description: 'Portable Document Format', length: 1},
+            {name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai',
+             description: '', length: 1},
+            {name: 'Native Client', filename: 'internal-nacl-plugin',
+             description: '', length: 2},
+        ];
+        p.refresh = () => {};
+        return p;
+    },
+});
+
+// Fix permissions.query
+const origQuery = window.navigator.permissions.query.bind(
+    window.navigator.permissions
+);
+window.navigator.permissions.query = (params) => {
+    if (params.name === 'notifications')
+        return Promise.resolve({state: Notification.permission});
+    return origQuery(params);
+};
+
+// Clean up automation globals
 delete window.__playwright;
 delete window.__pw_manual;
 delete window.__pwInitScripts;
 for (const key of Object.keys(window)) {
     if (key.startsWith('cdc_') || key.startsWith('__pw')) delete window[key];
+}
+
+// Fix navigator.languages
+Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+
+// Fake connection.rtt (0 in automation, ~50 in real browsers)
+if (navigator.connection) {
+    Object.defineProperty(navigator.connection, 'rtt', {get: () => 50});
+}
+
+// Spoof navigator.userActivation (X checks hasBeenActive)
+if (navigator.userActivation) {
+    Object.defineProperty(navigator.userActivation, 'hasBeenActive', {
+        get: () => true,
+    });
+    Object.defineProperty(navigator.userActivation, 'isActive', {
+        get: () => false,
+    });
 }
 """
 
@@ -259,13 +313,7 @@ def _cleanup_stale_profile():
 
 
 async def _launch_persistent():
-    """Launch real Google Chrome via Patchright with a persistent profile.
-
-    Patchright is a drop-in Playwright fork that patches CDP detection
-    leaks (Runtime.enable, Console.enable) at the protocol level.
-    Combined with ``channel="chrome"`` (real Google Chrome, not Chromium),
-    this produces authentic TLS fingerprints and passes anti-bot checks
-    that detect bundled Chromium and CDP artifacts.
+    """Launch Playwright Chromium with a persistent profile.
 
     Uses ``launch_persistent_context`` so cookies and sessions survive
     browser restarts.  Returns ``(None, context, page)`` — persistent
@@ -273,16 +321,12 @@ async def _launch_persistent():
     """
     global _pw
     try:
-        from patchright.async_api import async_playwright
+        from playwright.async_api import async_playwright
     except ImportError:
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            raise RuntimeError(
-                "Neither patchright nor playwright is installed. "
-                "The agent container must include patchright. See Dockerfile.agent."
-            )
-        logger.warning("patchright not available, falling back to playwright (CDP leaks not patched)")
+        raise RuntimeError(
+            "playwright is not installed. The agent container must include "
+            "playwright and chromium. See Dockerfile.agent."
+        )
     _ensure_xvfb()
     _cleanup_stale_profile()
     _pw = await async_playwright().start()
@@ -290,34 +334,30 @@ async def _launch_persistent():
     Path(profile_dir).mkdir(parents=True, exist_ok=True)
     context = await _pw.chromium.launch_persistent_context(
         user_data_dir=profile_dir,
-        channel="chrome",
         headless=False,
-        no_viewport=True,  # don't override via CDP (detectable)
+        no_viewport=True,  # let browser use Xvnc's native resolution
         args=[
             "--disable-dev-shm-usage",
             "--no-first-run",
             "--disable-infobars",
             "--disable-blink-features=AutomationControlled",
-            # Match KasmVNC geometry — without a window manager, Chrome
-            # has no notion of "maximized" and may open at an arbitrary
-            # size.  Arkose Labs calculates challenge stage dimensions
-            # from window.innerWidth/innerHeight; mismatched or zero
-            # values crash it with "INVALID STAGE MAX > MIN".
-            "--window-size=1280,720",
-            "--window-position=0,0",
         ],
-        # Strip defaults that are detection vectors (Patchright handles some
-        # of these automatically, but explicit is defense-in-depth):
+        # Strip Playwright defaults that are detection vectors:
+        # --enable-automation: sets navigator.webdriver=true + shows infobar
+        # --disable-component-update: stealth driver indicator
+        # --disable-default-apps: real browsers load default apps
+        # NOTE: --disable-popup-blocking is kept (Playwright default) because
+        # Reddit's login flow uses window.open() — blocking popups silently
+        # prevents the login modal from appearing.
         ignore_default_args=[
             "--enable-automation",
-            "--disable-popup-blocking",
             "--disable-component-update",
             "--disable-default-apps",
         ],
     )
     await context.add_init_script(_STEALTH_INIT_SCRIPT)
     page = context.pages[0] if context.pages else await context.new_page()
-    logger.info("Browser backend: persistent (Patchright + Google Chrome + KasmVNC)")
+    logger.info("Browser backend: persistent (Playwright Chromium + KasmVNC)")
     return None, context, page
 
 
@@ -396,6 +436,15 @@ async def start_persistent_browser():
     os.environ["DISPLAY"] = ":99"
     logger.info("Started KasmVNC Xvnc on :99, web on :%s", listen_port)
 
+    # Start a lightweight window manager so popup windows (e.g. Reddit login)
+    # can be stacked, focused, and managed properly in the VNC session.
+    # Without a WM, popup windows hide behind the main browser window and
+    # subsequent window.open() calls reuse the hidden window silently.
+    subprocess.Popen(
+        ["openbox"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
     # Launch browser (DISPLAY is now set, _launch_persistent skips Xvfb)
     await _get_page()
 
@@ -446,6 +495,7 @@ async def browser_cleanup():
 _CDP_DEAD_SESSION_PATTERNS = (
     "Page.navigate limit reached",
     "ERR_TUNNEL_CONNECTION_FAILED",
+    "ERR_NAME_NOT_RESOLVED",
     "Target closed",
     "Session closed",
     "Browser has been closed",
