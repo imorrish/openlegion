@@ -225,8 +225,11 @@ class DockerBackend(RuntimeBackend):
             if platform.system() == "Windows":
                 host_path = Path(project_md_path).as_posix()
             volumes[host_path] = {"bind": "/app/PROJECT.md", "mode": "ro"}
+        elif project_md_path:
+            # PROJECT_MD_PATH set but file missing — skip (don't leak global context)
+            logger.warning("Project file not found: %s", project_md_path)
         else:
-            # Legacy fallback: mount global PROJECT.md if no projects exist
+            # No project assigned — mount global PROJECT.md (legacy/standalone)
             project_md = self.project_root / "PROJECT.md"
             if project_md.exists():
                 host_path = str(project_md)
@@ -434,7 +437,11 @@ class SandboxBackend(RuntimeBackend):
         project_md_path = self.extra_env.get("PROJECT_MD_PATH", "")
         if project_md_path and Path(project_md_path).exists():
             shutil.copy2(project_md_path, ws / "PROJECT.md")
+        elif project_md_path:
+            # PROJECT_MD_PATH set but file missing — skip (don't leak global context)
+            logger.warning("Project file not found: %s", project_md_path)
         else:
+            # No project assigned — copy global PROJECT.md (legacy/standalone)
             project_md = self.project_root / "PROJECT.md"
             if project_md.exists():
                 shutil.copy2(project_md, ws / "PROJECT.md")

@@ -39,6 +39,22 @@ class TestValidateProjectName:
         with pytest.raises(ValueError, match="Invalid project name"):
             _validate_project_name("-start")
 
+    def test_path_traversal_rejected(self):
+        for name in ["../escape", "foo/bar", "..", "./current", "a/../b"]:
+            with pytest.raises(ValueError, match="Invalid project name"):
+                _validate_project_name(name)
+
+    def test_max_length_boundary(self):
+        # 64 chars should pass
+        assert _validate_project_name("a" * 64) == "a" * 64
+        # 65 chars should fail
+        with pytest.raises(ValueError, match="Invalid project name"):
+            _validate_project_name("a" * 65)
+
+    def test_underscore_start_rejected(self):
+        with pytest.raises(ValueError, match="Invalid project name"):
+            _validate_project_name("_underscore")
+
 
 class TestLoadProjects:
     def test_no_projects_dir(self, tmp_path):
@@ -73,6 +89,22 @@ class TestLoadProjects:
         assert len(result) == 2
         assert "alpha" in result
         assert "beta" in result
+
+    def test_keyed_by_directory_name(self, tmp_path):
+        """Projects are keyed by directory name, not metadata 'name' field."""
+        projects_dir = tmp_path / "projects"
+        proj_dir = projects_dir / "dir-name"
+        proj_dir.mkdir(parents=True)
+        # metadata has a different 'name' than directory
+        (proj_dir / "metadata.yaml").write_text(yaml.dump({
+            "name": "metadata-name", "members": [],
+        }))
+
+        with patch("src.cli.config.PROJECTS_DIR", projects_dir):
+            result = _load_projects()
+
+        assert "dir-name" in result
+        assert "metadata-name" not in result
 
     def test_corrupted_metadata_skipped(self, tmp_path):
         projects_dir = tmp_path / "projects"
@@ -157,6 +189,45 @@ class TestCreateProject:
         assert "projects/my-proj/*" in perms["permissions"]["agent1"]["blackboard_read"]
         assert "projects/my-proj/*" in perms["permissions"]["agent1"]["blackboard_write"]
         assert "projects/my-proj/*" in perms["permissions"]["agent2"]["blackboard_read"]
+
+    def test_create_moves_agent_from_existing_project(self, tmp_path):
+        """Creating a project with members already in another project moves them."""
+        projects_dir = tmp_path / "projects"
+        # Pre-existing project with agent1
+        old_dir = projects_dir / "old-proj"
+        old_dir.mkdir(parents=True)
+        (old_dir / "metadata.yaml").write_text(yaml.dump({
+            "name": "old-proj", "members": ["agent1"],
+        }))
+
+        perms_file = tmp_path / "permissions.json"
+        perms_file.write_text(json.dumps({
+            "permissions": {
+                "agent1": {
+                    "blackboard_read": ["context/*", "projects/old-proj/*"],
+                    "blackboard_write": ["context/*", "projects/old-proj/*"],
+                },
+            }
+        }))
+
+        with (
+            patch("src.cli.config.PROJECTS_DIR", projects_dir),
+            patch("src.cli.config.PERMISSIONS_FILE", perms_file),
+        ):
+            _create_project("new-proj", members=["agent1"])
+
+        # Agent should be in new project only
+        new_meta = yaml.safe_load((projects_dir / "new-proj" / "metadata.yaml").read_text())
+        assert "agent1" in new_meta["members"]
+
+        # Removed from old project
+        old_meta = yaml.safe_load((old_dir / "metadata.yaml").read_text())
+        assert "agent1" not in old_meta["members"]
+
+        # Permissions updated
+        perms = json.loads(perms_file.read_text())
+        assert "projects/new-proj/*" in perms["permissions"]["agent1"]["blackboard_read"]
+        assert "projects/old-proj/*" not in perms["permissions"]["agent1"]["blackboard_read"]
 
     def test_create_duplicate_raises(self, tmp_path):
         projects_dir = tmp_path / "projects"
@@ -258,6 +329,19 @@ class TestAddRemoveAgentProject:
 
         meta = yaml.safe_load((projects_dir / "proj1" / "metadata.yaml").read_text())
         assert meta["members"].count("agent1") == 1
+
+    def test_add_to_nonexistent_project_raises(self, tmp_path):
+        projects_dir = tmp_path / "projects"
+        projects_dir.mkdir(parents=True)
+        perms_file = tmp_path / "permissions.json"
+        perms_file.write_text(json.dumps({"permissions": {"agent1": {}}}))
+
+        with (
+            patch("src.cli.config.PROJECTS_DIR", projects_dir),
+            patch("src.cli.config.PERMISSIONS_FILE", perms_file),
+        ):
+            with pytest.raises(ValueError, match="not found"):
+                _add_agent_to_project("ghost", "agent1")
 
     def test_remove_agent(self, tmp_path):
         projects_dir = tmp_path / "projects"

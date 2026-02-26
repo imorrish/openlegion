@@ -527,6 +527,7 @@ def project(ctx):
             ("delete", "Delete a project"),
             ("add-agent", "Add an agent to a project"),
             ("remove-agent", "Remove an agent from a project"),
+            ("edit", "Edit project description or context"),
         ]
         click.echo("Project management:\n")
         for i, (name, desc) in enumerate(commands, 1):
@@ -571,11 +572,11 @@ def project_create(name: str | None, desc: str, agents_str: str):
     if not desc:
         desc = click.prompt("Description", default="")
 
+    cfg = _load_config()
     members: list[str] = []
     if agents_str:
         members = [a.strip() for a in agents_str.split(",") if a.strip()]
     else:
-        cfg = _load_config()
         available = sorted(cfg.get("agents", {}).keys())
         if available:
             click.echo(f"\nAvailable agents: {', '.join(available)}")
@@ -586,7 +587,6 @@ def project_create(name: str | None, desc: str, agents_str: str):
                 members = [a.strip() for a in agents_input.split(",") if a.strip()]
 
     # Validate agent names exist
-    cfg = _load_config()
     all_agents = set(cfg.get("agents", {}))
     invalid = [a for a in members if a not in all_agents]
     if invalid:

@@ -412,7 +412,7 @@ async def test_execute_step_scoped_context_for_project_workflow():
 
     # Verify the task was sent with scoped context
     call_args = mock_client.post.call_args
-    sent_data = call_args[1].get("json") or call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("json")
+    sent_data = call_args.kwargs.get("json") or call_args.args[1]
     context = sent_data.get("context", {})
 
     # Should have project-scoped context, NOT global context
@@ -470,12 +470,52 @@ async def test_execute_step_global_context_for_global_workflow():
     await step_task
 
     call_args = mock_client.post.call_args
-    sent_data = call_args[1].get("json") or call_args[0][1] if len(call_args[0]) > 1 else call_args[1].get("json")
+    sent_data = call_args.kwargs.get("json") or call_args.args[1]
     context = sent_data.get("context", {})
 
     # Should have global context, NOT project-scoped context
     assert "context/global_info" in context
     assert "projects/marketing/context/leads" not in context
+
+    bb.close()
+    import os
+    os.unlink(db_path)
+
+
+def test_resolve_input_scopes_blackboard_for_project_workflow():
+    """input_from: blackboard:// is scoped for project workflows."""
+    import tempfile
+
+    from src.host.mesh import Blackboard
+
+    db_path = tempfile.mktemp(suffix=".db")
+    bb = Blackboard(db_path=db_path)
+    bb.write("projects/marketing/data/leads", {"leads": 42}, written_by="test")
+    bb.write("data/leads", {"leads": 0}, written_by="test")
+
+    orch = Orchestrator(
+        mesh_url="http://localhost:8420",
+        workflows_dir="/nonexistent",
+        blackboard=bb,
+    )
+
+    # Project workflow — input_from should be scoped
+    wf = WorkflowDefinition(
+        name="marketing/pipeline", trigger="test",
+        steps=[WorkflowStep(id="s1", task_type="t", agent="a", input_from="blackboard://data/leads")],
+    )
+    execution = WorkflowExecution(wf, {})
+    result = orch._resolve_input(execution, wf.steps[0])
+    assert result == {"leads": 42}
+
+    # Global workflow — same input_from is NOT scoped
+    wf_global = WorkflowDefinition(
+        name="global-pipeline", trigger="test",
+        steps=[WorkflowStep(id="s1", task_type="t", agent="a", input_from="blackboard://data/leads")],
+    )
+    execution_global = WorkflowExecution(wf_global, {})
+    result_global = orch._resolve_input(execution_global, wf_global.steps[0])
+    assert result_global == {"leads": 0}
 
     bb.close()
     import os

@@ -551,6 +551,11 @@ class Orchestrator:
             key = step.input_from.replace("blackboard://", "")
             for var_name, var_value in execution.trigger_payload.items():
                 key = key.replace(f"{{{var_name}}}", str(var_value))
+            # Scope blackboard reads for project workflows
+            wf_name = execution.workflow.name
+            if "/" in wf_name and not key.startswith("projects/"):
+                project_prefix = wf_name.split("/", 1)[0]
+                key = f"projects/{project_prefix}/{key}"
             if self.blackboard:
                 entry = self.blackboard.read(key)
                 return entry.value if entry else {}

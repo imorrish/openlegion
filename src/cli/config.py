@@ -454,10 +454,11 @@ def _load_projects() -> dict[str, dict]:
         return projects
     for meta_file in sorted(PROJECTS_DIR.glob("*/metadata.yaml")):
         try:
+            dir_name = meta_file.parent.name
             with open(meta_file) as f:
                 data = yaml.safe_load(f) or {}
             pm = ProjectMetadata(**data)
-            projects[pm.name] = pm.model_dump()
+            projects[dir_name] = pm.model_dump()
         except Exception as e:
             logger.warning("Failed to load project %s: %s", meta_file, e)
     return projects
@@ -492,7 +493,7 @@ def _create_project(
         name=name,
         description=description,
         created_at=datetime.now(UTC).isoformat(),
-        members=list(members or []),
+        members=[],  # members added via _add_agent_to_project below
     )
     with open(project_dir / "metadata.yaml", "w") as f:
         yaml.dump(pm.model_dump(), f, default_flow_style=False, sort_keys=False)
@@ -503,9 +504,9 @@ def _create_project(
         "<!-- Shared context for all agents in this project -->\n"
     )
 
-    # Wire up permissions for initial members
+    # Add initial members (handles removing from old projects + permissions)
     for agent in (members or []):
-        _add_project_blackboard_permissions(agent, name)
+        _add_agent_to_project(name, agent)
 
 
 def _delete_project(name: str) -> None:

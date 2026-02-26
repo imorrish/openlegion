@@ -776,6 +776,8 @@ def create_dashboard_router(
             raise HTTPException(status_code=503, detail="Runtime not available")
         if project:
             project_path = _resolve_project_path(project)
+            if not project_path.parent.exists():
+                raise HTTPException(status_code=404, detail=f"Project '{project}' not found")
         else:
             project_path = runtime.project_root / "PROJECT.md"
         exists = project_path.exists()

@@ -305,9 +305,8 @@ class REPLSession:
 
         if sub in ("list", "ls", ""):
             projects = _load_projects()
-            agent_projects = self.ctx.cfg.get("_agent_projects", {})
             all_agents = set(self.ctx.agents.keys())
-            assigned = set(agent_projects.keys()) & all_agents
+            assigned = {m for pdata in projects.values() for m in pdata.get("members", [])} & all_agents
 
             if not projects:
                 click.echo("  No projects configured. Create with: openlegion project create")
@@ -393,14 +392,19 @@ class REPLSession:
         from src.shared.trace import TRACE_HEADER, new_trace_id
 
         bc_msg = arg.strip()
-        broadcast_all = bc_msg.startswith("--all ")
+        broadcast_all = bc_msg == "--all" or bc_msg.startswith("--all ")
         if broadcast_all:
-            bc_msg = bc_msg[6:].strip()
+            bc_msg = bc_msg[5:].strip()
+        if not bc_msg:
+            click.echo("Usage: /broadcast <message>  (or /broadcast --all <message>)")
+            return
 
         # Determine target agents
         if self._active_project and not broadcast_all:
-            agent_projects = self.ctx.cfg.get("_agent_projects", {})
-            targets = [a for a in self.ctx.agents if agent_projects.get(a) == self._active_project]
+            from src.cli.config import _load_projects
+            projects = _load_projects()
+            project_members = set(projects.get(self._active_project, {}).get("members", []))
+            targets = [a for a in self.ctx.agents if a in project_members]
             if not targets:
                 click.echo(f"No agents in project '{self._active_project}'. Use --all to broadcast to everyone.")
                 return
@@ -629,7 +633,7 @@ class REPLSession:
             return key
 
         if sub in ("list", "ls"):
-            bypass_all = rest.startswith("--all")
+            bypass_all = rest == "--all" or rest.startswith("--all ")
             if bypass_all:
                 rest = rest[5:].strip()
             prefix = rest if bypass_all else _project_key(rest)

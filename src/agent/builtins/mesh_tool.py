@@ -232,8 +232,6 @@ async def save_artifact(
 ) -> dict:
     if workspace_manager is None:
         return {"error": "No workspace_manager available"}
-    if mesh_client and mesh_client.is_standalone:
-        return {"error": _STANDALONE_ERROR}
     try:
         from pathlib import Path
         artifacts_dir = Path(workspace_manager.root) / "artifacts"
@@ -244,7 +242,8 @@ async def save_artifact(
         filepath.parent.mkdir(parents=True, exist_ok=True)
         filepath.write_text(content)
 
-        if mesh_client:
+        # Register on blackboard (skip for standalone agents — no project blackboard)
+        if mesh_client and not mesh_client.is_standalone:
             agent_id = mesh_client.agent_id
             key = f"artifacts/{agent_id}/{name}"
             await mesh_client.write_blackboard(key, {
