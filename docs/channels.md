@@ -27,6 +27,12 @@ All channels support the same command set:
 | `/debug [trace_id]` | Show recent traces or trace detail |
 | `/costs` | Show today's LLM spend per agent |
 | `/addkey <service> <key>` | Add an API credential to the vault |
+| `/removekey <name>` | Remove a credential from the vault |
+| `/blackboard [list\|get\|set\|del]` | View/edit shared blackboard entries |
+| `/queue` | Show agent task queue status |
+| `/workflow [list\|run]` | List or trigger workflows |
+| `/cron [list\|del\|pause\|resume\|run]` | Manage cron jobs |
+| `/project [list\|create\|delete\|...]` | Manage multi-project namespaces |
 | `/reset` | Clear conversation with active agent |
 | `/help` | Show command help |
 
@@ -40,7 +46,7 @@ openlegion start -d       # Detached (background)
 openlegion chat <agent>   # Connect to running agent (detached mode)
 ```
 
-The CLI REPL supports the full command set above plus token-level streaming responses with tool-use progress indicators. All channels now have full command parity with the CLI REPL (except `/add`, `/edit`, and `/remove` which require interactive prompts).
+The CLI REPL supports the full command set above plus additional management commands (`/add`, `/edit`, `/remove` for agent CRUD) and token-level streaming responses with tool-use progress indicators. External channels (Telegram, Discord, Slack, WhatsApp) support the core command set listed above; `/add`, `/edit`, and `/remove` are REPL-only as they require interactive prompts.
 
 ## Telegram
 

@@ -11,7 +11,7 @@ OpenLegion is designed assuming agents will be compromised. Defense-in-depth wit
 | 3. Credential separation | Vault holds keys, agents call via proxy | Key leakage, unauthorized API use |
 | 4. Permission enforcement | Per-agent ACLs for messaging, blackboard, pub/sub, APIs | Unauthorized data access |
 | 5. Input validation | Path traversal prevention, safe condition eval, token budgets, iteration limits | Injection, runaway loops |
-| 6. Unicode sanitization | Invisible character stripping at three choke points | Prompt injection via invisible Unicode |
+| 6. Unicode sanitization | Invisible character stripping at multiple choke points | Prompt injection via invisible Unicode |
 
 ## Runtime Isolation
 
@@ -19,7 +19,7 @@ OpenLegion is designed assuming agents will be compromised. Defense-in-depth wit
 
 Agents run as non-root (UID 1000) with:
 - `no-new-privileges` security option
-- 512MB memory limit
+- 512MB memory limit (1GB for persistent-browser agents)
 - 50% CPU quota
 - No host filesystem access (only `/data` volume)
 - Bridge network with port mapping (no direct host network on macOS/Windows)
@@ -143,7 +143,7 @@ Workflow conditions (`src/host/orchestrator.py`) use a regex-based parser:
 
 Agents process untrusted text from user messages, web pages, HTTP responses, tool outputs, blackboard data, and MCP servers. Attackers can embed invisible instructions using tag characters (U+E0001-E007F), RTL overrides (U+202A-202E), zero-width spaces, variation selectors, and other invisible codepoints that LLM tokenizers decode while being invisible to humans.
 
-`sanitize_for_prompt()` in `src/shared/utils.py` strips these at three choke points:
+`sanitize_for_prompt()` in `src/shared/utils.py` strips these at multiple choke points (the primary three plus additional call sites in `workspace.py`, `mesh_tool.py`, and `dashboard/server.py`):
 
 | Choke Point | File | What It Covers |
 |-------------|------|----------------|
