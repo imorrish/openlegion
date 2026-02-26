@@ -259,6 +259,12 @@ class DockerBackend(RuntimeBackend):
             "security_opt": ["no-new-privileges"],
         }
 
+        # Chrome uses /dev/shm for rendering compositing.  Docker's default
+        # is 64 MB — not enough for a full browser page, causing rendering
+        # stalls and extreme UI latency.  Give persistent browsers 256 MB.
+        if is_persistent:
+            run_kwargs["shm_size"] = "256m"
+
         if self.use_host_network:
             run_kwargs["network_mode"] = "host"
         else:

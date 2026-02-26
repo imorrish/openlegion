@@ -337,7 +337,6 @@ async def _launch_persistent():
         headless=False,
         no_viewport=True,  # let browser use Xvnc's native resolution
         args=[
-            "--disable-dev-shm-usage",
             "--no-first-run",
             "--disable-infobars",
             "--disable-blink-features=AutomationControlled",
