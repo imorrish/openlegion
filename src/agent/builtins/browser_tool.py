@@ -91,9 +91,8 @@ def _cleanup_stale_profile():
     """Kill orphaned browser processes and remove stale lock files.
 
     After a crash, Chrome leaves SingletonLock/SingletonSocket/SingletonCookie
-    and Firefox leaves lock/.parentlock in the profile directory.  A new browser
-    instance refuses to start if these exist.
-    This helper cleans up before each launch.
+    in the profile directory.  A new browser instance refuses to start if these
+    exist.  This helper cleans up before each launch.
     """
     profile_dir = Path("/data/browser_profile")
     if not profile_dir.exists():
@@ -209,8 +208,8 @@ async def _launch_persistent():
     """Connect Playwright to the already-running Chrome via CDP.
 
     Chrome was launched directly by ``_launch_chrome_subprocess()`` during
-    ``start_persistent_browser()``.  This function connects Playwright
-    on-demand when the agent needs programmatic browser control.
+    ``start_browser()``.  This function connects Playwright on-demand
+    when the agent needs programmatic browser control.
     """
     global _pw
     try:
@@ -566,8 +565,6 @@ async def browser_navigate(url: str, wait_ms: int = 1000, *, mesh_client=None) -
                     continue
                 await _disconnect_cdp()
                 return {"error": error_msg, "url": url}
-        await _disconnect_cdp()
-        return {"error": "Navigation failed after session reset", "url": url}
 
 
 def _parse_aria_snapshot(yaml_text: str) -> list[dict]:

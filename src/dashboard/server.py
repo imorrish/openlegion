@@ -280,7 +280,7 @@ def create_dashboard_router(
             "spend_week": spend_week,
             "budget": budget,
         }
-        # Include VNC info for persistent browser agents
+        # Include VNC info if available
         if runtime:
             agent_info = runtime.agents.get(agent_id, {})
             vnc_url = _vnc_url_for_request(request, agent_info)

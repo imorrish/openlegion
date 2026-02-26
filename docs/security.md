@@ -19,7 +19,7 @@ OpenLegion is designed assuming agents will be compromised. Defense-in-depth wit
 
 Agents run as non-root (UID 1000) with:
 - `no-new-privileges` security option
-- 512MB memory limit (1GB for persistent-browser agents)
+- 1GB memory limit (all agents include Chrome + KasmVNC)
 - 50% CPU quota
 - No host filesystem access (only `/data` volume)
 - Bridge network with port mapping (no direct host network on macOS/Windows)

@@ -755,7 +755,7 @@ class REPLSession:
     def _cmd_addkey(self, arg: str) -> None:
         if not arg.strip():
             click.echo("  Known services: anthropic, openai, gemini, deepseek, moonshot, minimax, xai, groq, zai")
-            click.echo("  Other keys: brave_search, brightdata_cdp_url, or any custom name")
+            click.echo("  Other keys: brave_search, or any custom name")
             service = click.prompt("Service name")
         else:
             service = arg.split()[0]
@@ -850,7 +850,7 @@ class REPLSession:
                 )
             click.echo("Applied.")
         else:
-            # Model, browser, description, system prompt — restart the container.
+            # Model, description, system prompt — restart the container.
             self._restart_agent(name)
 
     def _restart_agent(self, name: str) -> None:

@@ -710,8 +710,8 @@ def _update_agent_field(name: str, field: str, value) -> None:
 def _edit_agent_interactive(name: str) -> str | None:
     """Interactive property editor for an agent. Reads fresh config.
 
-    Returns the field name that was changed (``"model"``, ``"browser"``,
-    ``"role"``, ``"budget"``), or ``None`` if nothing changed.  Callers
+    Returns the field name that was changed (``"model"``, ``"role"``,
+    ``"budget"``), or ``None`` if nothing changed.  Callers
     decide how to apply the change (restart hint, live restart,
     cost-tracker update, etc.).
     """
