@@ -314,9 +314,22 @@ def _cleanup_stale_profile():
 
 
 def _find_chromium_binary() -> str:
-    """Find the Chromium binary installed by Playwright."""
+    """Find Chrome/Chromium binary, preferring Google Chrome for TLS authenticity."""
     import glob as globmod
 
+    # Prefer Google Chrome — authentic TLS fingerprint that matches UA string.
+    # Chrome for Testing (Playwright's bundled Chromium) has a different JA3/JA4
+    # fingerprint that anti-bot systems detect and block.
+    for name in ["google-chrome-stable", "google-chrome"]:
+        try:
+            result = subprocess.run(
+                ["which", name], capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
+    # Fallback to Playwright's bundled Chromium
     for pattern in [
         "/opt/pw-browsers/chromium-*/chrome-linux64/chrome",
         "/opt/pw-browsers/chromium-*/chrome-linux/chrome",
@@ -326,8 +339,7 @@ def _find_chromium_binary() -> str:
         matches = sorted(globmod.glob(pattern))
         if matches:
             return matches[-1]
-    # Fallback to system-installed browsers
-    for name in ["chromium-browser", "chromium", "google-chrome"]:
+    for name in ["chromium-browser", "chromium"]:
         try:
             result = subprocess.run(
                 ["which", name], capture_output=True, text=True, timeout=5,
@@ -363,10 +375,16 @@ def _launch_chrome_subprocess():
             # Required for Docker — Chrome's sandbox needs kernel capabilities
             # that aren't available in containers with no-new-privileges.
             "--no-sandbox",
-            "--disable-setuid-sandbox",
+            # Disable Chrome's built-in async DNS client — it bypasses Docker
+            # Desktop's DNS forwarder, causing 10-30s timeouts on every request.
+            # Belt-and-suspenders with the enterprise policy in the Dockerfile.
+            "--disable-features=AsyncDns",
             "--no-first-run",
             "--no-default-browser-check",
-            "--disable-infobars",
+            # --test-type suppresses the "unsupported command-line flag" infobar.
+            # --disable-infobars was deprecated and ironically triggers its own
+            # warning banner in newer Chrome, which shifts page content down.
+            "--test-type",
             "--disable-blink-features=AutomationControlled",
             "--disable-popup-blocking",
             "--window-size=1280,720",
@@ -399,6 +417,22 @@ async def _launch_persistent():
     )
     context = browser.contexts[0]
     page = context.pages[0] if context.pages else await context.new_page()
+
+    # Override Playwright's Target.setAutoAttach — by default Playwright sets
+    # waitForDebuggerOnStart:true which freezes every new target (including
+    # popup windows from window.open()).  Reddit's login flow opens a popup
+    # that hangs indefinitely because it's waiting for the debugger to resume.
+    try:
+        cdp = await context.new_cdp_session(page)
+        await cdp.send("Target.setAutoAttach", {
+            "autoAttach": True,
+            "waitForDebuggerOnStart": False,
+            "flatten": True,
+        })
+        await cdp.detach()
+    except Exception as e:
+        logger.debug("Could not override Target.setAutoAttach: %s", e)
+
     logger.info("Playwright connected to Chrome via CDP (agent control)")
     return browser, context, page
 
