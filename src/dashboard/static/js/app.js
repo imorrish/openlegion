@@ -1211,6 +1211,21 @@ function dashboard() {
       this.fetchProject();
     },
 
+    openProjectModal() {
+      this.showProjectForm = true;
+      this.$nextTick(() => {
+        const el = document.getElementById('project-name-input');
+        if (el) el.focus();
+      });
+    },
+
+    closeProjectModal() {
+      if (this.projectFormLoading) return;
+      this.showProjectForm = false;
+      this.newProjectName = '';
+      this.newProjectDesc = '';
+    },
+
     async createProject() {
       const name = this.newProjectName.trim();
       if (!name) return;
@@ -1226,9 +1241,8 @@ function dashboard() {
           body: JSON.stringify({ name, description: this.newProjectDesc.trim(), members: [] }),
         });
         if (resp.ok) {
-          this.newProjectName = '';
-          this.newProjectDesc = '';
-          this.showProjectForm = false;
+          this.projectFormLoading = false;
+          this.closeProjectModal();
           await this.fetchProjects();
           this.switchProject(name);
           this.showToast(`Project "${name}" created`);
