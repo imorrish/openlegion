@@ -5,11 +5,11 @@
  * Real-time updates via WebSocket + periodic REST polling.
  */
 const _IDENTITY_TABS = [
-  { id: 'config', label: 'Config', file: null, access: 'user', desc: 'Model, role, and daily budget.' },
-  { id: 'identity', label: 'Identity', file: null, access: 'user', desc: 'Agent personality and instructions.' },
-  { id: 'memory', label: 'Memory', file: null, access: 'agent', desc: 'Long-term memory and autonomous heartbeat rules.' },
-  { id: 'logs', label: 'Logs', file: null, access: 'auto', desc: 'Activity logs and learned corrections.' },
-  { id: 'capabilities', label: 'Tools', file: null, access: 'auto', desc: 'Available tools and capabilities.' },
+  { id: 'identity', label: 'Identity', file: null, access: 'user' },
+  { id: 'memory', label: 'Memory', file: null, access: 'agent' },
+  { id: 'config', label: 'Config', file: null, access: 'user' },
+  { id: 'logs', label: 'Logs', file: null, access: 'auto' },
+  { id: 'capabilities', label: 'Tools', file: null, access: 'auto' },
 ];
 
 const _IDENTITY_FILE_MAP = {
@@ -471,6 +471,11 @@ function dashboard() {
 
     get identityCurrentTab() {
       return _IDENTITY_TABS.find(t => t.id === this.identityTab) || _IDENTITY_TABS[0];
+    },
+
+    isFileDefault(file) {
+      const info = this.identityFiles.find(f => f.name === file);
+      return info ? info.is_default : true;
     },
 
     fileBudgetPct(file, cap) {
