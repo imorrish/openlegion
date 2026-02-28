@@ -742,6 +742,39 @@ def create_dashboard_router(
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    @api_router.post("/api/credentials/validate")
+    async def api_validate_credential(request: Request) -> dict:
+        """Validate an API key by making a minimal LLM call."""
+        body = await request.json()
+        service = body.get("service", "").strip().lower()
+        key = body.get("key", "").strip()
+        base_url = body.get("base_url", "").strip() or None
+        if not service or not key:
+            raise HTTPException(status_code=400, detail="service and key are required")
+        # Strip _api_key suffix to get provider name
+        provider = service.replace("_api_key", "")
+        from src.setup_wizard import _VALIDATION_MODELS
+        validation_model = _VALIDATION_MODELS.get(provider)
+        if not validation_model:
+            return {"valid": True, "skipped": True, "reason": "unknown provider"}
+        try:
+            import litellm
+            kwargs: dict = {
+                "model": validation_model,
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1,
+                "api_key": key,
+            }
+            if base_url:
+                kwargs["api_base"] = base_url
+            await litellm.acompletion(**kwargs)
+            return {"valid": True, "skipped": False}
+        except Exception as e:
+            if isinstance(e, litellm.AuthenticationError):
+                return {"valid": False, "skipped": False, "reason": "Invalid API key"}
+            # Network, rate limit, etc. — don't block
+            return {"valid": True, "skipped": True, "reason": str(e)[:200]}
+
     @api_router.post("/api/credentials")
     async def api_add_credential(request: Request) -> dict:
         if credential_vault is None:
