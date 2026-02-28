@@ -14,7 +14,14 @@ from pathlib import Path
 import click
 
 from src.cli.channels import ChannelManager
-from src.cli.config import ENV_FILE, PROJECT_ROOT, PROJECTS_DIR, _check_docker_running, _ensure_docker_image, _load_config
+from src.cli.config import (
+    ENV_FILE,
+    PROJECT_ROOT,
+    PROJECTS_DIR,
+    _check_docker_running,
+    _ensure_docker_image,
+    _load_config,
+)
 from src.cli.formatting import echo_fail, echo_header, echo_ok
 
 logger = logging.getLogger("cli")
