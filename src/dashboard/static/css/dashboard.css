@@ -922,6 +922,19 @@ body.light .nav-tab-inactive {
   color: #6b7280;
 }
 
+/* ── Auto-growing textarea for chat input ───────── */
+
+textarea.dash-input {
+  line-height: 1.4;
+  overflow-y: auto;
+}
+
+/* ── Action button no-wrap ──────────────────────── */
+
+.action-btn {
+  white-space: nowrap;
+}
+
 body.light .dash-input {
   background-color: white;
   border-color: #d1d5db;
