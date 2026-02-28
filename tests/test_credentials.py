@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.host.credentials import (
-    _ANTHROPIC_OAUTH_BETAS,
+    _ANTHROPIC_OAUTH_APP_HEADER,
+    _ANTHROPIC_OAUTH_BETAS_FULL,
+    _ANTHROPIC_OAUTH_USER_AGENT,
     AGENT_PREFIX,
     SYSTEM_CREDENTIAL_PROVIDERS,
     SYSTEM_PREFIX,
@@ -1128,12 +1130,14 @@ class TestOAuth:
         assert headers == {}
 
     def test_get_auth_for_model_oauth_token(self, monkeypatch):
-        """OAuth token is passed through as api_key (litellm handles headers)."""
+        """OAuth token returns identity headers for Anthropic server validation."""
         monkeypatch.setenv("OPENLEGION_SYSTEM_ANTHROPIC_API_KEY", "sk-ant-oat01-token123")
         v = CredentialVault()
         api_key, headers = v._get_auth_for_model("anthropic/claude-sonnet-4-6")
         assert api_key == "sk-ant-oat01-token123"
-        assert headers == {}
+        assert headers["user-agent"] == _ANTHROPIC_OAUTH_USER_AGENT
+        assert headers["x-app"] == _ANTHROPIC_OAUTH_APP_HEADER
+        assert headers["anthropic-beta"] == _ANTHROPIC_OAUTH_BETAS_FULL
 
     def test_get_auth_for_model_non_anthropic_ignores_oauth(self, monkeypatch):
         """OAuth prefix on a non-Anthropic model produces no auth headers."""
@@ -1143,8 +1147,9 @@ class TestOAuth:
         assert api_key == "sk-ant-oat01-fake"
         assert headers == {}
 
-    def test_get_auth_for_model_no_key(self):
+    def test_get_auth_for_model_no_key(self, monkeypatch):
         """Missing key returns (None, {})."""
+        monkeypatch.delenv("OPENLEGION_SYSTEM_ANTHROPIC_API_KEY", raising=False)
         v = CredentialVault()
         api_key, headers = v._get_auth_for_model("anthropic/claude-sonnet-4-6")
         assert api_key is None
@@ -1203,8 +1208,10 @@ class TestOAuthIntegration:
         # Real token must reach litellm so its built-in OAuth detection
         # (sk-ant-oat prefix) sets Authorization: Bearer and omits x-api-key.
         assert captured["api_key"] == "sk-ant-oat01-integration"
-        # No manual extra_headers override — litellm handles OAuth internally.
-        assert "extra_headers" not in captured
+        # Identity headers must be passed so Anthropic server accepts the request.
+        assert captured["extra_headers"]["user-agent"] == _ANTHROPIC_OAUTH_USER_AGENT
+        assert captured["extra_headers"]["x-app"] == _ANTHROPIC_OAUTH_APP_HEADER
+        assert captured["extra_headers"]["anthropic-beta"] == _ANTHROPIC_OAUTH_BETAS_FULL
 
     async def test_stream_llm_oauth_passes_real_token(self, monkeypatch):
         """Verify streaming path passes real OAuth token to litellm."""
@@ -1239,4 +1246,38 @@ class TestOAuthIntegration:
                 pass
 
         assert captured["api_key"] == "sk-ant-oat01-stream"
-        assert "extra_headers" not in captured
+        # Identity headers must be passed for streaming too.
+        assert captured["extra_headers"]["user-agent"] == _ANTHROPIC_OAUTH_USER_AGENT
+        assert captured["extra_headers"]["x-app"] == _ANTHROPIC_OAUTH_APP_HEADER
+        assert captured["extra_headers"]["anthropic-beta"] == _ANTHROPIC_OAUTH_BETAS_FULL
+
+    async def test_embed_oauth_passes_identity_headers(self, monkeypatch):
+        """Verify embed path passes OAuth identity headers to litellm."""
+        pytest.importorskip("litellm")
+
+        monkeypatch.setenv("OPENLEGION_SYSTEM_ANTHROPIC_API_KEY", "sk-ant-oat01-embed")
+        v = CredentialVault()
+
+        captured: dict = {}
+
+        async def mock_aembedding(**kwargs):
+            captured.update(kwargs)
+            resp = MagicMock()
+            resp.data = [MagicMock(embedding=[0.1, 0.2, 0.3])]
+            return resp
+
+        with patch("litellm.aembedding", side_effect=mock_aembedding):
+            req = APIProxyRequest(
+                service="llm", action="embed",
+                params={
+                    "model": "anthropic/voyage-3",
+                    "text": "hello",
+                },
+            )
+            result = await v.execute_api_call(req)
+
+        assert result.success
+        assert captured["api_key"] == "sk-ant-oat01-embed"
+        assert captured["extra_headers"]["user-agent"] == _ANTHROPIC_OAUTH_USER_AGENT
+        assert captured["extra_headers"]["x-app"] == _ANTHROPIC_OAUTH_APP_HEADER
+        assert captured["extra_headers"]["anthropic-beta"] == _ANTHROPIC_OAUTH_BETAS_FULL
