@@ -18,7 +18,27 @@ logger = logging.getLogger("cli")
 
 # ── Path constants ──────────────────────────────────────────
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+def _find_project_root() -> Path:
+    """Find the project root directory.
+
+    When running from source, __file__ is in src/cli/config.py so
+    parent.parent.parent gives the repo root. When pip-installed into
+    site-packages, that path is wrong — fall back to CWD and walk up
+    looking for pyproject.toml.
+    """
+    candidate = Path(__file__).resolve().parent.parent.parent
+    if (candidate / "pyproject.toml").exists():
+        return candidate
+    # Installed as package — walk up from CWD
+    cwd = Path.cwd()
+    for p in [cwd, *cwd.parents]:
+        if (p / "pyproject.toml").exists():
+            return p
+    return cwd
+
+
+PROJECT_ROOT = _find_project_root()
 ENV_FILE = PROJECT_ROOT / ".env"
 CONFIG_FILE = PROJECT_ROOT / "config" / "mesh.yaml"
 AGENTS_FILE = PROJECT_ROOT / "config" / "agents.yaml"

@@ -108,8 +108,8 @@ def start(config_path: str, detach: bool, sandbox: bool, serve: bool):
     ctx = RuntimeContext(config_path, use_sandbox=sandbox)
     try:
         ctx.start()
-        if serve:
-            # Headless mode: keep alive via signal wait (used by -d)
+        if serve or not sys.stdin.isatty():
+            # Headless mode: keep alive via signal wait (used by -d and systemd)
             import signal
             shutdown_event = threading.Event()
             signal.signal(signal.SIGTERM, lambda *_: shutdown_event.set())
