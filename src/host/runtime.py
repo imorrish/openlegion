@@ -277,6 +277,7 @@ class DockerBackend(RuntimeBackend):
             "cap_drop": ["ALL"],
             "read_only": True,
             "tmpfs": {"/tmp": "size=10m,noexec,nosuid"},
+            "restart_policy": {"Name": "unless-stopped"},
         }
         # Start on default bridge so it can reach host.docker.internal
         if platform.system() == "Linux":

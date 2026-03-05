@@ -624,7 +624,7 @@ class TestMeshRelay:
         assert backend._mesh_relay is new_relay
 
     def test_relay_hardening(self):
-        """Relay container has security hardening settings."""
+        """Relay container has security hardening and auto-restart."""
         import docker as _docker
 
         backend = _make_docker_backend(_mesh_relay=None)
@@ -642,6 +642,9 @@ class TestMeshRelay:
         assert run_call.kwargs["read_only"] is True
         assert run_call.kwargs["cap_drop"] == ["ALL"]
         assert run_call.kwargs["security_opt"] == ["no-new-privileges"]
+        assert run_call.kwargs["restart_policy"] == {"Name": "unless-stopped"}
+        # No unnecessary capabilities
+        assert "cap_add" not in run_call.kwargs
 
     def test_relay_cleans_stale_on_start(self):
         """_start_mesh_relay removes a stale relay container before starting."""
