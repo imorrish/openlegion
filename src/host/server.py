@@ -1168,14 +1168,17 @@ def create_mesh_app(
             await websocket.close(code=1011, reason="Browser service not available")
             return
 
-        # KasmVNC 1.4.0 WebSocket at /websockify requires Basic Auth on upgrade.
-        # Inject credentials server-side so the dashboard user never sees a prompt.
+        # KasmVNC requires Sec-WebSocket-Origin (non-standard) for /websockify.
+        # Also inject Basic Auth credentials server-side.
         import base64
         kasm_creds = base64.b64encode(
             f"{_KASM_USER}:{_KASM_PASS}".encode()
         ).decode()
         target = f"ws://127.0.0.1:{port}/websockify"
-        extra_headers = {"Authorization": f"Basic {kasm_creds}"}
+        extra_headers = {
+            "Authorization": f"Basic {kasm_creds}",
+            "Sec-WebSocket-Origin": f"http://127.0.0.1:{port}",
+        }
 
         await websocket.accept()
         try:
