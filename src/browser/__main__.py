@@ -65,7 +65,6 @@ def _start_kasmvnc() -> subprocess.Popen:
         "-httpd", "/usr/share/kasmvnc/www",
         "-sslOnly", "0",
         "-SecurityTypes", "VncAuth",
-        "-disableBasicAuth",
         "-AlwaysShared",
         "-interface", "0.0.0.0",
         # Allow iframe embedding from dashboard (different port = different origin)
