@@ -42,6 +42,19 @@ def _start_kasmvnc() -> subprocess.Popen:
     - ``-httpd``: serve the KasmVNC web client files
     - ``-AlwaysShared``: allow multiple VNC viewers
     """
+    # KasmVNC 1.4.0 requires a valid .kasmpasswd file for its /api/get_token
+    # endpoint even when -disableBasicAuth is set. Without it, the web client
+    # can't establish a websocket connection and shows a blue screen.
+    kasmpasswd = os.path.expanduser("~/.kasmpasswd")
+    if not os.path.exists(kasmpasswd):
+        subprocess.run(
+            ["kasmvncpasswd", "-u", "browser", "-ow", kasmpasswd],
+            input="openlegion\nopenlegion\n",
+            text=True,
+            capture_output=True,
+        )
+        logger.debug("Created .kasmpasswd for KasmVNC API auth")
+
     cmd = [
         "Xvnc", _DISPLAY,
         "-geometry", "1920x1080",
