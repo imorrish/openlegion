@@ -237,6 +237,12 @@ def create_dashboard_router(
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    @api_router.get("/api/agent-templates")
+    async def api_agent_templates() -> list:
+        """Return available skill templates for creating new agents."""
+        from src.cli.config import _load_skill_templates
+        return _load_skill_templates()
+
     @api_router.post("/api/agents")
     async def api_add_agent(request: Request) -> dict:
         """Add a new agent: create config, start container, register."""
@@ -246,6 +252,7 @@ def create_dashboard_router(
         role = body.get("role", "").strip()
         model = body.get("model", "").strip()
         avatar = body.get("avatar", 1)
+        template = body.get("template", "").strip()
 
         if not name:
             raise HTTPException(status_code=400, detail="name is required")
@@ -271,6 +278,11 @@ def create_dashboard_router(
         except (ValueError, TypeError):
             raise HTTPException(status_code=400, detail="Avatar must be an integer between 1 and 50")
 
+        if template:
+            import re as _re
+            if not _re.match(r"^[a-z][a-z0-9_-]*/[a-z][a-z0-9_-]*$", template):
+                raise HTTPException(status_code=400, detail="Invalid template id format")
+
         if not model:
             from src.cli.config import _load_config
             default = _load_config().get("llm", {}).get("default_model", "openai/gpt-4o-mini")
@@ -295,14 +307,27 @@ def create_dashboard_router(
             raise HTTPException(status_code=503, detail="Runtime not available")
 
         try:
-            from src.cli.config import _create_agent, _load_config, _update_agent_field
-            _create_agent(name, role, model)
+            from src.cli.config import (
+                _create_agent,
+                _create_agent_from_template,
+                _load_config,
+                _update_agent_field,
+            )
+            if template:
+                try:
+                    _create_agent_from_template(name, template, model)
+                except ValueError as e:
+                    raise HTTPException(status_code=400, detail=str(e))
+            else:
+                _create_agent(name, role, model)
             _update_agent_field(name, "avatar", avatar)
             if permissions is not None:
                 permissions.reload()
 
             cfg = _load_config()
             acfg = cfg.get("agents", {}).get(name, {})
+            if template:
+                role = acfg.get("role", role)
             import os
             skills_dir = os.path.abspath(acfg.get("skills_dir", ""))
             url = runtime.start_agent(
