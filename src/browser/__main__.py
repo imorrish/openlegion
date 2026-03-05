@@ -36,27 +36,16 @@ def _start_kasmvnc() -> subprocess.Popen:
     """Start KasmVNC Xvnc — combined X server + VNC server + web server.
 
     Uses Xvnc directly with:
+    - ``-disableBasicAuth``: no HTTP Basic Auth on web client or WebSocket
+    - ``-SecurityTypes None``: no VNC-level authentication
     - ``-sslOnly 0``: disable TLS (access control via Docker port mapping)
-    - ``-SecurityTypes None``: no VNC authentication
     - ``-httpd``: serve the KasmVNC web client files
     - ``-AlwaysShared``: allow multiple VNC viewers
 
-    Auth is handled by the mesh host's VNC proxy which fetches API tokens
-    server-side. The web client never sees the login prompt because it
-    connects through the proxy, not directly to KasmVNC.
+    Auth is handled by the mesh host's VNC proxy. The browser container
+    is only reachable from the host via mapped ports, never from the internet.
+    WebSocket endpoint: ``/websockify`` (no token required with disableBasicAuth).
     """
-    # KasmVNC 1.4.0 requires a valid .kasmpasswd for /api/get_token and
-    # /api/ws. The mesh VNC proxy authenticates server-side with these creds.
-    kasmpasswd = os.path.expanduser("~/.kasmpasswd")
-    if not os.path.exists(kasmpasswd):
-        subprocess.run(
-            ["kasmvncpasswd", "-u", "browser", "-ow", kasmpasswd],
-            input="openlegion\nopenlegion\n",
-            text=True,
-            capture_output=True,
-        )
-        logger.debug("Created .kasmpasswd for KasmVNC API auth")
-
     cmd = [
         "Xvnc", _DISPLAY,
         "-geometry", "1920x1080",
@@ -64,25 +53,14 @@ def _start_kasmvnc() -> subprocess.Popen:
         "-websocketPort", str(_VNC_PORT),
         "-httpd", "/usr/share/kasmvnc/www",
         "-sslOnly", "0",
-        "-SecurityTypes", "VncAuth",
+        "-SecurityTypes", "None",
+        "-disableBasicAuth",
         "-AlwaysShared",
         "-interface", "0.0.0.0",
         # Allow iframe embedding from dashboard (different port = different origin)
         "-http-header", "X-Frame-Options=ALLOWALL",
         "-http-header", "Access-Control-Allow-Origin=*",
     ]
-    # VncAuth needs a VNC password file (separate from .kasmpasswd)
-    vnc_dir = os.path.expanduser("~/.vnc")
-    os.makedirs(vnc_dir, exist_ok=True)
-    passwd_file = os.path.join(vnc_dir, "passwd")
-    if not os.path.exists(passwd_file):
-        subprocess.run(
-            ["kasmvncpasswd", passwd_file],
-            input="openlegion\nopenlegion\n",
-            text=True,
-            capture_output=True,
-        )
-        logger.debug("Created VNC password file")
     proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(0.5)
     if proc.poll() is not None:
