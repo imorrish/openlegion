@@ -152,12 +152,13 @@ async def _run_subagent(
         _cleanup_depth(subagent_id)
         memory.close()
 
-    # Write result to blackboard
-    result_key = f"subagent_results/{parent_id}/{subagent_id}"
-    try:
-        await mesh_client.write_blackboard(result_key, result_data)
-    except Exception as e:
-        logger.warning("Failed to write subagent result to blackboard: %s", e)
+    # Write result to blackboard (project agents only — standalone has no blackboard)
+    if not getattr(mesh_client, "is_standalone", False):
+        result_key = f"subagent_results/{parent_id}/{subagent_id}"
+        try:
+            await mesh_client.write_blackboard(result_key, result_data)
+        except Exception as e:
+            logger.warning("Failed to write subagent result to blackboard: %s", e)
 
     return result_data
 
@@ -167,8 +168,8 @@ async def _run_subagent(
     description=(
         "Spawn a lightweight subagent to handle a subtask in parallel. "
         "The subagent runs in the same container with its own memory and workspace. "
-        "Results are written to the blackboard at subagent_results/<your_id>/<subagent_id>. "
-        "Use read_shared_state to check results. Max 3 concurrent, max depth 2. "
+        "Use wait_for_subagent to get results when done. "
+        "Max 3 concurrent, max depth 2. "
         "NOTE: Subagents should not use browser tools (shared browser state)."
     ),
     parameters={
@@ -274,9 +275,8 @@ async def list_subagents(*, mesh_client=None) -> dict:
 @skill(
     name="wait_for_subagent",
     description=(
-        "Wait for a subagent to complete and return its result. "
-        "Use after spawn_subagent instead of polling read_shared_state. "
-        "Returns the subagent's result directly."
+        "Wait for a subagent to complete and return its result directly. "
+        "Use after spawn_subagent. Returns the subagent's result."
     ),
     parameters={
         "subagent_id": {
@@ -303,9 +303,19 @@ async def wait_for_subagent(
         await asyncio.wait_for(asyncio.shield(task), timeout=timeout)
     except asyncio.TimeoutError:
         return {"error": f"Subagent {subagent_id} did not complete within {timeout}s", "timed_out": True}
-    # Task is done — read result from blackboard
-    result_key = f"subagent_results/{parent_id}/{subagent_id}"
-    if mesh_client:
+    except Exception:
+        pass  # Task raised — handled by task.result() below
+    # Task is done — get result from the asyncio task directly
+    try:
+        result_data = task.result()
+        if isinstance(result_data, dict):
+            return {"subagent_id": subagent_id, "completed": True, **result_data}
+    except Exception as e:
+        logger.warning("Failed to get subagent result from task: %s", e)
+
+    # Fallback: try reading from blackboard (project agents only)
+    if mesh_client and not getattr(mesh_client, "is_standalone", False):
+        result_key = f"subagent_results/{parent_id}/{subagent_id}"
         try:
             bb = await mesh_client.read_blackboard(result_key)
             if bb is not None:
