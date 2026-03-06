@@ -113,7 +113,7 @@ OpenLegion was designed from day one assuming agents will be compromised.
 | **Cost controls** | None | Per-agent daily + monthly budget caps |
 | **Multi-agent routing** | LLM CEO agent | Deterministic YAML DAG workflows |
 | **LLM providers** | Broad | 100+ via LiteLLM with health-tracked failover |
-| **Test coverage** | Minimal | 1744 tests including full Docker E2E |
+| **Test coverage** | Minimal | 1826 tests including full Docker E2E |
 | **Codebase size** | 430,000+ lines | ~26,000 lines — auditable in a day |
 
 ---
@@ -910,7 +910,7 @@ pytest tests/
 | Memory Tools | 6 | memory_search, memory_save |
 | Memory Integration | 6 | Vector search, cross-task recall, salience |
 | E2E | 17 | Container health, workflow, chat, memory, triggering |
-| **Total** | **1744** | |
+| **Total** | **1826** | |
 
 ---
 
