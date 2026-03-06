@@ -38,7 +38,6 @@ All agents share a single **browser service container** running Camoufox (a stea
 | `browser_click` | `ref` or `selector` | Click element by accessibility ref or CSS selector |
 | `browser_type` | `ref` or `selector`, `text` | Type into input field (supports `$CRED{name}` handles) |
 | `browser_scroll` | `direction`, `amount`, `ref` | Scroll page up/down or scroll element into view. Default direction: `down`, default amount: one viewport height. |
-| `browser_evaluate` | `script` | Run JavaScript in page context |
 | `browser_reset` | -- | Reset browser session (profile preserved) |
 | `browser_solve_captcha` | -- | Manual CAPTCHA detection and solving. Usually not needed — `browser_navigate` auto-detects CAPTCHAs. |
 
