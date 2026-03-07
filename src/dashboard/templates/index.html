@@ -2351,7 +2351,7 @@
                 <span class="text-xs text-gray-400" x-text="'#' + addAgentForm.avatar"></span>
               </button>
               <div x-show="addAgentForm._showPicker" x-cloak @click.outside="addAgentForm._showPicker = false"
-                class="absolute z-50 mt-1 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[272px] max-h-[200px] overflow-y-auto custom-scrollbar">
+                class="absolute z-50 mt-1 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[272px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto custom-scrollbar">
                 <div class="grid grid-cols-8 gap-1">
                   <template x-for="n in 50" :key="n">
                     <button type="button" @click="addAgentForm.avatar = n; addAgentForm._showPicker = false"

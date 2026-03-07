@@ -907,19 +907,24 @@ select:focus-visible,
 
 /* ── Mobile responsiveness ───────────────────────── */
 
-/* Prevent horizontal overflow from any element */
-html, body {
+/* Prevent horizontal overflow from any element.
+   Only on body — setting it on html can break position:fixed on iOS Safari. */
+body {
   overflow-x: hidden;
 }
 
 /* iOS Safari auto-zooms on inputs with font-size < 16px.
-   Bump all form controls to 16px on touch-sized viewports. */
+   Use element selectors to catch ALL form controls regardless of CSS class. */
 @media (max-width: 767px) {
-  .dash-input,
-  .dash-textarea,
-  .dash-select,
-  .chat-slide-textarea,
-  .chat-input-wrap textarea {
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  input[type="url"],
+  input[type="tel"],
+  textarea,
+  select {
     font-size: 16px !important;
   }
 }
