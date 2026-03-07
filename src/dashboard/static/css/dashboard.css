@@ -905,6 +905,30 @@ select:focus-visible,
   }
 }
 
+/* ── Mobile responsiveness ───────────────────────── */
+
+/* Prevent horizontal overflow from any element.
+   Only on body — setting it on html can break position:fixed on iOS Safari. */
+body {
+  overflow-x: hidden;
+}
+
+/* iOS Safari auto-zooms on inputs with font-size < 16px.
+   Use element selectors to catch ALL form controls regardless of CSS class. */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="password"],
+  input[type="email"],
+  input[type="search"],
+  input[type="url"],
+  input[type="tel"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* ── Chat input composite (textarea + send button) ── */
 
 .chat-input-wrap {
@@ -930,6 +954,23 @@ select:focus-visible,
   outline: 2px solid rgba(99, 102, 241, 0.6);
   outline-offset: 2px;
   border-radius: 50%;
+}
+
+/* ── Chat slide-over textarea ───────────────────── */
+
+.chat-slide-textarea {
+  max-height: 120px;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.25rem 0.5rem 0.625rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #e5e7eb;
+  overflow-y: auto;
 }
 
 /* ── Auto-growing textarea for chat input ───────── */
