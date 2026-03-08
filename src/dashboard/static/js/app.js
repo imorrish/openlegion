@@ -3561,12 +3561,12 @@ function dashboard() {
     },
 
     _bbNsMap: {
+      'status/': 'status',
       'tasks/': 'tasks',
-      'context/': 'context',
-      'signals/': 'signals',
-      'goals/': 'goals',
+      'research/': 'research',
+      'drafts/': 'drafts',
       'artifacts/': 'artifacts',
-      'history/': 'history',
+      'alerts/': 'alerts',
     },
 
     bbNsName(key) {
