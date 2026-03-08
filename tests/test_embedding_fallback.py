@@ -5,7 +5,6 @@ disable vector search entirely (set embed_fn = None) and fall back to
 keyword-only search, rather than spamming warnings on every call.
 """
 
-import asyncio
 import os
 import tempfile
 
@@ -132,9 +131,6 @@ class TestEmbeddingGracefulFallback:
     @pytest.mark.asyncio
     async def test_search_failures_count_toward_disable(self, tmp_db):
         """Embedding failures during search also count toward the 3-failure threshold."""
-        tracker = _CallTracker(fail_until=999)
-        store = MemoryStore(tmp_db, embed_fn=tracker)
-
         # Save without embedding (no embed_fn for save)
         store_no_embed = MemoryStore(tmp_db)
         await store_no_embed.store_fact("data", "important information")
