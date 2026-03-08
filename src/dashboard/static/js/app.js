@@ -289,6 +289,7 @@ function dashboard() {
     _queuePollInterval: null,
     _cronInterval: null,
     _seenEventIds: new Set(),
+    _initTime: new Date().toISOString(),  // page-load timestamp for replay filtering
 
     // URL routing
     _skipPush: false,
@@ -894,28 +895,33 @@ function dashboard() {
         this.fetchModelHealth();
       }
 
-      // Show toast for agent notifications + inject into chat panel
+      // Show toast for agent notifications + inject into chat panel.
+      // Skip replayed events (timestamp before page load) to avoid
+      // re-showing old toasts and duplicating chat history on reconnect.
       if (evt.type === 'notification' && evt.agent) {
-        this.showToast(`[${evt.agent}] ${(evt.data?.message || '').substring(0, 120)}`);
-        if (!this.chatHistories[evt.agent]) this.chatHistories[evt.agent] = [];
-        this.chatHistories[evt.agent].push({
-          role: 'notification',
-          content: evt.data?.message || '',
-          streaming: false,
-          tools: [],
-        });
-        this._saveChatToSession();
-        if (this.openChats.includes(evt.agent)) {
-          if (this.chatPanelMinimized || this.activeChatId !== evt.agent) {
-            this.chatUnread = { ...this.chatUnread, [evt.agent]: (this.chatUnread[evt.agent] || 0) + 1 };
+        const isReplay = evt.timestamp && evt.timestamp < this._initTime;
+        if (!isReplay) {
+          this.showToast(`[${evt.agent}] ${(evt.data?.message || '').substring(0, 120)}`);
+          if (!this.chatHistories[evt.agent]) this.chatHistories[evt.agent] = [];
+          this.chatHistories[evt.agent].push({
+            role: 'notification',
+            content: evt.data?.message || '',
+            streaming: false,
+            tools: [],
+          });
+          this._saveChatToSession();
+          if (this.openChats.includes(evt.agent)) {
+            if (this.chatPanelMinimized || this.activeChatId !== evt.agent) {
+              this.chatUnread = { ...this.chatUnread, [evt.agent]: (this.chatUnread[evt.agent] || 0) + 1 };
+            } else {
+              this.$nextTick(() => this._scrollChat(evt.agent));
+            }
           } else {
+            // Open a new chat tab without stealing focus
+            this.openChats.push(evt.agent);
+            if (!this.activeChatId) this.activeChatId = evt.agent;
             this.$nextTick(() => this._scrollChat(evt.agent));
           }
-        } else {
-          // Open a new chat tab without stealing focus
-          this.openChats.push(evt.agent);
-          if (!this.activeChatId) this.activeChatId = evt.agent;
-          this.$nextTick(() => this._scrollChat(evt.agent));
         }
       }
 
