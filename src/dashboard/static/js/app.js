@@ -1946,7 +1946,12 @@ function dashboard() {
       this.cronRunLoading = { ...this.cronRunLoading, [jobId]: true };
       try {
         const resp = await fetch(`${window.__config.apiBase}/cron/${jobId}/run`, { method: 'POST' });
-        if (resp.ok) this.showToast(`Job ${jobId} triggered`);
+        if (resp.ok) {
+          this.showToast(`Job ${jobId} triggered`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Error: ${err.detail || 'Run failed'}`);
+        }
         this.fetchCronJobs();
       } catch (e) { console.warn('runCronJob failed:', e); }
       finally { this.cronRunLoading = { ...this.cronRunLoading, [jobId]: false }; }
@@ -1956,8 +1961,13 @@ function dashboard() {
       if (this.cronRunLoading[jobId]) return;
       this.cronRunLoading = { ...this.cronRunLoading, [jobId]: true };
       try {
-        await fetch(`${window.__config.apiBase}/cron/${jobId}/pause`, { method: 'POST' });
-        this.showToast(`Job ${jobId} paused`);
+        const resp = await fetch(`${window.__config.apiBase}/cron/${jobId}/pause`, { method: 'POST' });
+        if (resp.ok) {
+          this.showToast(`Job ${jobId} paused`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Error: ${err.detail || 'Pause failed'}`);
+        }
         this.fetchCronJobs();
       } catch (e) { console.warn('pauseCronJob failed:', e); }
       finally { this.cronRunLoading = { ...this.cronRunLoading, [jobId]: false }; }
@@ -1967,8 +1977,13 @@ function dashboard() {
       if (this.cronRunLoading[jobId]) return;
       this.cronRunLoading = { ...this.cronRunLoading, [jobId]: true };
       try {
-        await fetch(`${window.__config.apiBase}/cron/${jobId}/resume`, { method: 'POST' });
-        this.showToast(`Job ${jobId} resumed`);
+        const resp = await fetch(`${window.__config.apiBase}/cron/${jobId}/resume`, { method: 'POST' });
+        if (resp.ok) {
+          this.showToast(`Job ${jobId} resumed`);
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Error: ${err.detail || 'Resume failed'}`);
+        }
         this.fetchCronJobs();
       } catch (e) { console.warn('resumeCronJob failed:', e); }
       finally { this.cronRunLoading = { ...this.cronRunLoading, [jobId]: false }; }
