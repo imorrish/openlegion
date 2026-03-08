@@ -153,14 +153,7 @@ def create_agent_app(loop: AgentLoop) -> FastAPI:
         Returns the agent's in-memory chat messages so the dashboard
         can restore conversation history across page reloads and new tabs.
         """
-        messages = []
-        for m in loop._chat_messages:
-            role = m.get("role", "unknown")
-            content = m.get("content", "")
-            # Map internal roles to dashboard-friendly roles
-            if role == "tool":
-                continue  # skip tool result messages (internal plumbing)
-            messages.append({"role": role, "content": content})
+        messages = loop.get_chat_messages()
         return {"messages": messages, "count": len(messages)}
 
     @app.get("/history")

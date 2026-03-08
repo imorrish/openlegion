@@ -662,7 +662,9 @@ function dashboard() {
           if (parsed.openChats) this.openChats = parsed.openChats;
           if (parsed.activeChatId) this.activeChatId = parsed.activeChatId;
         }
-      } catch (_) {}
+      } catch (e) {
+        console.debug('chat history fetch skipped:', e.message || e);
+      }
 
       // Command palette: Cmd+K / Ctrl+K + tab shortcuts 1/2/3
       this._cmdPaletteHandler = (e) => {
