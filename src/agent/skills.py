@@ -182,7 +182,8 @@ class SkillRegistry:
                 params = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in props.items())
             else:
                 params = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in raw_params.items())
-            lines.append(f"- {name}({params}): {info['description']}")
+            desc = " ".join(info["description"].split())
+            lines.append(f"- {name}({params}): {desc}")
         return "\n".join(lines)
 
     def get_tool_definitions(self, exclude: frozenset[str] | None = None) -> list[dict]:
