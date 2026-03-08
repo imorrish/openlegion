@@ -184,7 +184,8 @@ class AgentLoop:
             else:
                 lines.append(f"- **{agent['name']}**")
         lines.append(
-            "\nCoordinate via blackboard — write only data a teammate needs to act on.\n"
+            "\nCoordinate via blackboard — write your progress to status/{your_id} "
+            "and work output under your domain prefix (e.g. research/, drafts/).\n"
             "Report results to the user via chat or notify_user, not the blackboard."
         )
         return "\n".join(lines)
