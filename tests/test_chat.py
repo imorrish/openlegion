@@ -245,3 +245,182 @@ class TestChatEndpoints:
         assert "context_pct" in data
         assert data["context_max"] == 50_000
         assert data["context_tokens"] >= 0
+
+
+# ── Auto-continue session tests ──────────────────────────────
+
+
+class TestAutoContinueSession:
+    @pytest.mark.asyncio
+    async def test_auto_continue_resets_round_counter(self):
+        """Hitting CHAT_MAX_TOTAL_ROUNDS triggers auto-continue instead of error."""
+        loop = _make_loop()
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_messages = [
+            {"role": "user", "content": "msg"},
+            {"role": "assistant", "content": "reply"},
+        ]
+
+        result = await loop.chat("Continue working")
+        # Should get a normal response, not the old error message
+        assert "absolute limit" not in result["response"]
+        assert result["response"] == "Hello!"
+        # Round counter should have been reset
+        assert loop._chat_total_rounds == 0
+        assert loop._chat_auto_continues == 1
+
+    @pytest.mark.asyncio
+    async def test_auto_continue_with_context_manager(self):
+        """Auto-continue calls force_compact on the context manager."""
+        from src.agent.context import ContextManager
+
+        loop = _make_loop()
+        cm = MagicMock(spec=ContextManager)
+        cm.force_compact = AsyncMock(return_value=[
+            {"role": "user", "content": "## Conversation Summary\n\nSummary here"},
+        ])
+        cm.maybe_compact = AsyncMock(side_effect=lambda s, m: m)
+        cm.context_warning = MagicMock(return_value=None)
+        loop.context_manager = cm
+
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_messages = [
+            {"role": "user", "content": "msg"},
+            {"role": "assistant", "content": "reply"},
+        ]
+
+        result = await loop.chat("Continue")
+        assert result["response"] == "Hello!"
+        cm.force_compact.assert_called_once()
+        assert loop._chat_auto_continues == 1
+        assert loop._chat_total_rounds == 0
+
+    @pytest.mark.asyncio
+    async def test_absolute_limit_after_max_continues(self):
+        """After _MAX_SESSION_CONTINUES, session returns an error."""
+        loop = _make_loop()
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_auto_continues = loop._MAX_SESSION_CONTINUES
+
+        result = await loop.chat("Keep going")
+        assert "absolute limit" in result["response"]
+        assert loop.state == "idle"
+
+    @pytest.mark.asyncio
+    async def test_reset_clears_auto_continues(self):
+        """reset_chat resets the auto-continue counter."""
+        loop = _make_loop()
+        loop._chat_auto_continues = 3
+        loop._chat_total_rounds = 150
+        await loop.reset_chat()
+        assert loop._chat_auto_continues == 0
+        assert loop._chat_total_rounds == 0
+
+    @pytest.mark.asyncio
+    async def test_round_warning_in_system_prompt(self):
+        """System prompt includes session note at 80% of round limit."""
+        loop = _make_loop()
+        loop._chat_total_rounds = loop._CHAT_ROUND_WARNING
+
+        prompt = loop._build_chat_system_prompt()
+        assert "Session Note" in prompt
+        assert "auto-refreshed" in prompt
+
+    @pytest.mark.asyncio
+    async def test_no_warning_below_threshold(self):
+        """No session note below the warning threshold."""
+        loop = _make_loop()
+        loop._chat_total_rounds = loop._CHAT_ROUND_WARNING - 1
+
+        prompt = loop._build_chat_system_prompt()
+        assert "Session Note" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_auto_continue_in_tool_loop(self):
+        """Auto-continue triggers mid-tool-loop without breaking the session."""
+        tool_response = LLMResponse(
+            content="",
+            tool_calls=[ToolCallInfo(name="exec", arguments={"command": "ls"})],
+            tokens_used=10,
+        )
+        final_response = LLMResponse(content="Done", tokens_used=10)
+
+        loop = _make_loop([tool_response, final_response])
+        loop.skills.execute = AsyncMock(return_value={"result": "ok"})
+        loop.skills.get_tool_definitions = MagicMock(
+            return_value=[{"type": "function", "function": {"name": "exec"}}]
+        )
+        # Set rounds to just below the limit so the first tool round triggers it
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS - 1
+
+        result = await loop.chat("Do something")
+        assert result["response"] == "Done"
+        # Should have auto-continued: counter reset after hitting limit
+        assert loop._chat_auto_continues == 1
+        assert loop._chat_total_rounds == 0
+
+    @pytest.mark.asyncio
+    async def test_auto_continue_survives_compaction_failure(self):
+        """Round counter resets even when force_compact throws."""
+        from src.agent.context import ContextManager
+
+        loop = _make_loop()
+        cm = MagicMock(spec=ContextManager)
+        cm.force_compact = AsyncMock(side_effect=RuntimeError("LLM down"))
+        cm.maybe_compact = AsyncMock(side_effect=lambda s, m: m)
+        cm.context_warning = MagicMock(return_value=None)
+        loop.context_manager = cm
+
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_messages = [
+            {"role": "user", "content": "msg"},
+            {"role": "assistant", "content": "reply"},
+        ]
+
+        result = await loop.chat("Continue despite failure")
+        # Should still work — fell back to trim
+        assert result["response"] == "Hello!"
+        assert loop._chat_auto_continues == 1
+        # Counter must reset even though compaction failed
+        assert loop._chat_total_rounds == 0
+
+    @pytest.mark.asyncio
+    async def test_auto_continue_streaming_entry(self):
+        """Streaming chat auto-continues at the round limit."""
+        loop = _make_loop()
+
+        async def _failing_stream(**kwargs):
+            raise RuntimeError("no stream")
+            yield  # noqa: unreachable — makes this an async generator
+
+        loop.llm.chat_stream = _failing_stream
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_messages = [
+            {"role": "user", "content": "msg"},
+            {"role": "assistant", "content": "reply"},
+        ]
+
+        events = []
+        async for event in loop.chat_stream("Continue streaming"):
+            events.append(event)
+
+        done_events = [e for e in events if e.get("type") == "done"]
+        assert len(done_events) == 1
+        # Should get a normal response, not the absolute limit error
+        assert "absolute limit" not in done_events[0]["response"]
+        assert loop._chat_auto_continues == 1
+        assert loop._chat_total_rounds == 0
+
+    @pytest.mark.asyncio
+    async def test_streaming_absolute_limit(self):
+        """Streaming chat returns error at absolute limit."""
+        loop = _make_loop()
+        loop._chat_total_rounds = loop.CHAT_MAX_TOTAL_ROUNDS
+        loop._chat_auto_continues = loop._MAX_SESSION_CONTINUES
+
+        events = []
+        async for event in loop.chat_stream("Keep going"):
+            events.append(event)
+
+        text_events = [e for e in events if e.get("type") == "text_delta"]
+        assert any("absolute limit" in e["content"] for e in text_events)

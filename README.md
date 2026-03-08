@@ -373,7 +373,7 @@ Accepts a user message. On the first message, loads workspace context
 (PROJECT.md if in a project, INSTRUCTIONS.md, SOUL.md, USER.md, MEMORY.md, SYSTEM.md) into the system prompt,
 injects a live Runtime Context block (permissions, budget, fleet, cron),
 and searches memory for relevant facts. Executes tool calls in a bounded loop
-(max 30 rounds per turn, 200 total rounds per session) and runs context compaction when needed.
+(max 30 rounds per turn, auto-compaction every 200 rounds with seamless continuation) and runs context compaction when needed.
 
 ### Tool Loop Detection
 

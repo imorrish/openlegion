@@ -509,3 +509,63 @@ class TestTokenCount:
         count = cm.token_count(msgs)
         assert isinstance(count, int)
         assert count > 0
+
+
+class TestForceCompact:
+    @pytest.mark.asyncio
+    async def test_force_compact_always_runs(self):
+        """force_compact summarizes even when token usage is low."""
+        llm = MagicMock()
+        llm.chat = AsyncMock(
+            return_value=LLMResponse(content="Summary of conversation.", tokens_used=20)
+        )
+        # Large window so normal compaction would NOT trigger
+        cm = ContextManager(max_tokens=1_000_000, llm=llm, workspace=None)
+        msgs = _make_messages(6, chars_each=100)
+        assert not cm.should_compact(msgs)  # confirm normal wouldn't compact
+
+        result = await cm.force_compact("system", msgs)
+        # Should have summarized anyway
+        assert len(result) < len(msgs)
+        assert llm.chat.call_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_force_compact_empty_messages(self):
+        """force_compact returns empty list for empty input."""
+        cm = ContextManager(max_tokens=100_000)
+        result = await cm.force_compact("system", [])
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_force_compact_flushes_memory(self):
+        """force_compact flushes facts to workspace before summarizing."""
+        tmpdir = tempfile.mkdtemp()
+        try:
+            workspace = WorkspaceManager(workspace_dir=tmpdir)
+            llm = MagicMock()
+            llm.chat = AsyncMock(side_effect=[
+                # First call: fact extraction
+                LLMResponse(
+                    content='[{"key": "test_fact", "value": "important", "category": "fact"}]',
+                    tokens_used=20,
+                ),
+                # Second call: summarization
+                LLMResponse(content="Summary.", tokens_used=10),
+            ])
+            cm = ContextManager(max_tokens=1_000_000, llm=llm, workspace=workspace)
+            msgs = _make_messages(6, chars_each=200)
+
+            await cm.force_compact("system", msgs)
+            memory = workspace.load_memory()
+            assert "test_fact" in memory
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    @pytest.mark.asyncio
+    async def test_force_compact_falls_back_to_hard_prune(self):
+        """force_compact uses hard_prune when LLM is unavailable."""
+        cm = ContextManager(max_tokens=100, llm=None, workspace=None)
+        msgs = _make_messages(20, chars_each=50)
+
+        result = await cm.force_compact("system", msgs)
+        assert len(result) < len(msgs)

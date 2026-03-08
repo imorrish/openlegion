@@ -191,6 +191,49 @@ class ContextManager:
         )
         return result
 
+    async def force_compact(
+        self, system_prompt: str, messages: list[dict],
+    ) -> list[dict]:
+        """Force compaction regardless of token usage.
+
+        Used by session auto-continue to reset context at round-count
+        checkpoints.  Follows the same flush-then-summarize pattern as
+        ``maybe_compact`` but skips the threshold checks.
+        """
+        if not messages:
+            return messages
+
+        tokens_before = self.token_count(messages)
+        msg_count_before = len(messages)
+        t0 = time.monotonic()
+        logger.info(
+            "Force-compacting session (%d msgs, %s tokens)",
+            msg_count_before, f"{tokens_before:,}",
+        )
+
+        self._flush_triggered = False
+
+        if self.workspace and self.llm:
+            await self._flush_to_memory(system_prompt, messages)
+
+        if self.llm:
+            result = await self._summarize_compact(system_prompt, messages)
+        else:
+            result = self._hard_prune(messages)
+
+        tokens_after = self.token_count(result)
+        elapsed_ms = int((time.monotonic() - t0) * 1000)
+        ratio = round(tokens_after / tokens_before, 2) if tokens_before else 0
+        method = "summarize" if self.llm else "hard_prune"
+        logger.info(
+            "Force-compaction complete: %s, %d->%d msgs, %s->%s tokens "
+            "(%.0f%% reduction), %dms",
+            method, msg_count_before, len(result),
+            f"{tokens_before:,}", f"{tokens_after:,}",
+            (1 - ratio) * 100, elapsed_ms,
+        )
+        return result
+
     async def _extract_and_store_facts(
         self, messages: list[dict], *, label: str,
     ) -> int:

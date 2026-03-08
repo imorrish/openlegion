@@ -147,7 +147,7 @@ Workflow conditions (`src/host/orchestrator.py`) use a regex-based parser:
 ### Bounded Execution
 
 - Task mode: 20 iterations maximum (`AgentLoop.MAX_ITERATIONS`)
-- Chat mode: 30 tool rounds maximum (`CHAT_MAX_TOOL_ROUNDS`), 200 total rounds per session (`CHAT_MAX_TOTAL_ROUNDS`)
+- Chat mode: 30 tool rounds maximum per turn (`CHAT_MAX_TOOL_ROUNDS`), auto-compaction every 200 rounds (`CHAT_MAX_TOTAL_ROUNDS`) with session continuation (up to 5 auto-continues)
 - Per-agent token budgets enforced at the vault layer
 - Prevents runaway loops and unbounded spend
 
