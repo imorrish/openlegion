@@ -87,15 +87,17 @@ def _sanitize_value(value):
 @skill(
     name="read_shared_state",
     description=(
-        "Read a value from the shared blackboard. The blackboard is for "
-        "agent-to-agent collaboration — data that other agents have shared "
-        "for you to act on. Keys are hierarchical: context/market_analysis, "
-        "goals/researcher, signals/urgent. Returns null if the key does not exist."
+        "Read a value from the shared blackboard. Returns the full value "
+        "another agent wrote, or null if the key doesn't exist. Use "
+        "list_shared_state first if you don't know the exact key."
     ),
     parameters={
         "key": {
             "type": "string",
-            "description": "Blackboard key to read (e.g. 'goals/researcher', 'context/market')",
+            "description": (
+                "Blackboard key to read (e.g. 'status/researcher', "
+                "'research/acme_findings')"
+            ),
         },
     },
 )
@@ -118,17 +120,26 @@ async def read_shared_state(key: str, *, mesh_client=None) -> dict:
     name="write_shared_state",
     description=(
         "Write a value to the shared blackboard for OTHER AGENTS to read. "
-        "The blackboard is for agent-to-agent collaboration only — do NOT "
-        "use it for status updates or reporting to the user (use notify_user "
-        "or chat responses for that). Write here when another agent needs "
-        "specific data to do their work. Use hierarchical keys: goals/ for "
-        "objectives, context/ for shared knowledge, signals/ for alerts, "
-        "tasks/ for work requests. Values must be JSON-serializable."
+        "The blackboard is persistent agent-to-agent storage — do NOT use "
+        "it to report to the user (use notify_user or chat for that).\n\n"
+        "Use hierarchical keys with your domain prefix:\n"
+        "- status/{your_id} — your current progress (so teammates know "
+        "what you're doing)\n"
+        "- {domain}/ — your work output that others need (e.g. research/, "
+        "drafts/, analysis/, tasks/, alerts/)\n"
+        "- artifacts/ — managed by save_artifact, don't write directly\n\n"
+        "Blackboard vs pub/sub: write to the blackboard when data should "
+        "persist for others to read later. Use publish_event for one-time "
+        "signals that don't need to be stored (e.g. 'research_complete').\n\n"
+        "Values must be JSON-serializable."
     ),
     parameters={
         "key": {
             "type": "string",
-            "description": "Blackboard key (e.g. 'goals/engineer', 'context/market')",
+            "description": (
+                "Blackboard key (e.g. 'status/researcher', "
+                "'research/acme_findings', 'tasks/pending/review')"
+            ),
         },
         "value": {
             "type": "string",
@@ -157,13 +168,16 @@ async def write_shared_state(key: str, value: str, *, mesh_client=None) -> dict:
     description=(
         "Discover what's on the shared blackboard by listing entries matching a key "
         "prefix. Returns key names, authors, timestamps, and value previews — but "
-        "NOT full values (use read_shared_state for that). Use when you don't know "
-        "the exact key: prefix='tasks/' to find tasks, prefix='' to see everything."
+        "NOT full values (use read_shared_state for that). Use prefix='' to see "
+        "everything, or a domain prefix like 'research/' or 'status/' to filter."
     ),
     parameters={
         "prefix": {
             "type": "string",
-            "description": "Key prefix to filter by (e.g. 'goals/', 'context/', 'signals/')",
+            "description": (
+                "Key prefix to filter by (e.g. 'status/', 'research/', "
+                "'artifacts/', '' for all)"
+            ),
         },
     },
 )
@@ -190,9 +204,11 @@ async def list_shared_state(prefix: str, *, mesh_client=None) -> dict:
 @skill(
     name="publish_event",
     description=(
-        "Publish an event to the mesh pub/sub system. Other agents subscribed "
-        "to the topic will receive the event. Use this for broadcasting updates "
-        "like 'research_complete' or 'build_passed'."
+        "Broadcast a one-time signal to other agents via pub/sub. Subscribed "
+        "agents receive it immediately as a steer message — no polling needed. "
+        "Use this for ephemeral notifications (e.g. 'research_complete', "
+        "'build_failed'). The event is NOT stored — if no one is subscribed, "
+        "it's lost. For data that should persist, use write_shared_state instead."
     ),
     parameters={
         "topic": {
@@ -227,11 +243,11 @@ async def publish_event(
 @skill(
     name="subscribe_event",
     description=(
-        "Subscribe to a pub/sub topic at runtime. Once subscribed, events "
-        "published to this topic by other agents will arrive as steer "
-        "messages between your tool rounds — you don't need to poll. "
-        "Use this to react to coordination signals like 'research_complete' "
-        "or 'deploy_ready'."
+        "Subscribe to a pub/sub topic. Once subscribed, events published to "
+        "this topic by other agents arrive as steer messages between your "
+        "tool rounds — no polling needed. Use this to react to coordination "
+        "signals (e.g. 'research_complete', 'deploy_ready'). For watching "
+        "persistent blackboard changes, use watch_blackboard instead."
     ),
     parameters={
         "topic": {
@@ -264,7 +280,7 @@ async def subscribe_event(topic: str, *, mesh_client=None) -> dict:
     parameters={
         "pattern": {
             "type": "string",
-            "description": "Glob pattern for keys to watch (e.g. 'tasks/*', 'context/research_*')",
+            "description": "Glob pattern for keys to watch (e.g. 'tasks/*', 'status/*', 'research/*')",
         },
     },
 )
@@ -339,10 +355,16 @@ async def claim_task(key: str, claim_value: str, *, mesh_client=None) -> dict:
             "type": "string",
             "description": "File content to save",
         },
+        "description": {
+            "type": "string",
+            "description": "Short description of the artifact for teammates and the user",
+            "default": "",
+        },
     },
 )
 async def save_artifact(
-    name: str, content: str, *, mesh_client=None, workspace_manager=None,
+    name: str, content: str, description: str = "",
+    *, mesh_client=None, workspace_manager=None,
 ) -> dict:
     if workspace_manager is None:
         return {"error": "No workspace_manager available"}
@@ -360,11 +382,14 @@ async def save_artifact(
         if mesh_client and not mesh_client.is_standalone:
             agent_id = mesh_client.agent_id
             key = f"artifacts/{agent_id}/{name}"
-            await mesh_client.write_blackboard(key, {
+            meta = {
                 "path": str(filepath),
                 "size": len(content),
                 "name": name,
-            })
+            }
+            if description:
+                meta["description"] = description
+            await mesh_client.write_blackboard(key, meta)
 
         return {"saved": True, "path": str(filepath), "name": name}
     except Exception as e:

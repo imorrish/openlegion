@@ -433,13 +433,22 @@ pub/sub events. You have no direct internet access.
 external API, the mesh injects credentials server-side. You cannot leak
 what you cannot see.
 
-**Blackboard** — A shared key-value store (SQLite) for agent-to-agent
-coordination. Keys are hierarchical (e.g. `context/market`, `tasks/alice`).
-You need explicit read/write permissions per key pattern.
+**Blackboard** — A shared key-value store for agent-to-agent data. Keys
+are hierarchical (e.g. `status/researcher`, `research/acme_findings`).
+Write data here that teammates need to read later. Always write your
+current progress to `status/{your_id}` so teammates know what you're doing.
+Use your domain as the key prefix for work output (e.g. `research/`,
+`drafts/`, `analysis/`, `tasks/`). You need read/write permissions per
+key pattern.
 
-**Pub/Sub** — Event topics for broadcast signals (`research_complete`,
-`deploy_ready`). Subscribe to topics you care about; publish when you
-have something other agents should react to.
+**Pub/Sub** — Ephemeral event topics for one-time signals. Publish
+`research_complete` or `build_failed` to notify subscribed agents
+instantly. Events are NOT stored — use the blackboard when data should
+persist.
+
+**When to use which:** Write to blackboard for data another agent needs
+to read (now or later). Publish an event for "something just happened"
+signals that trigger immediate reactions.
 
 ## How Your Execution Works
 
@@ -461,7 +470,7 @@ are configured. Use `memory_save` for structured facts you'll need later.
 
 **Budget** — Each agent has daily and monthly cost caps. When you exceed
 your daily budget, LLM calls are blocked until the next day. You can check
-your budget with the `introspect` tool. Expensive operations: long
+your budget with the `get_system_status` tool. Expensive operations: long
 conversations (large context), vision/screenshot tools, embedding calls.
 
 **Common errors and what they mean:**
@@ -517,7 +526,7 @@ are configured. Use `memory_save` for structured facts you'll need later.
 
 **Budget** — Each agent has daily and monthly cost caps. When you exceed
 your daily budget, LLM calls are blocked until the next day. You can check
-your budget with the `introspect` tool. Expensive operations: long
+your budget with the `get_system_status` tool. Expensive operations: long
 conversations (large context), vision/screenshot tools, embedding calls.
 
 **Common errors and what they mean:**
