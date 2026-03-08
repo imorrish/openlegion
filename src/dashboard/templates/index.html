@@ -1040,6 +1040,10 @@
                 <div x-show="msg.role === 'user'" class="whitespace-pre-wrap break-words" x-text="msg.content"></div>
                 <div x-show="msg.role !== 'user'" class="chat-markdown break-words" x-html="renderMarkdown(msg.content)"></div>
                 <span x-show="msg.streaming" class="inline-block w-1 h-3 bg-indigo-400 animate-pulse ml-0.5 align-text-bottom"></span>
+                <div x-show="formatRelativeTime(msg.ts)"
+                  class="text-[9px] mt-0.5 opacity-40"
+                  :class="msg.role === 'user' ? 'text-indigo-200' : 'text-gray-500'"
+                  x-text="formatRelativeTime(msg.ts)"></div>
               </div>
             </div>
           </template>

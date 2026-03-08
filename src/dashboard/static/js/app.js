@@ -855,6 +855,18 @@ function dashboard() {
       this.toastQueue = this.toastQueue.filter(t => t.id !== id);
     },
 
+    formatRelativeTime(ts) {
+      if (!ts) return '';
+      const diff = Date.now() - ts;
+      if (diff < 60000) return '';  // under 1 min — too fresh to label
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      const d = new Date(ts);
+      const now = new Date();
+      const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      if (d.toDateString() === now.toDateString()) return time;
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ', ' + time;
+    },
+
     // ── WebSocket event handler ───────────────────────────
 
     onWsEvent(evt) {
@@ -912,6 +924,7 @@ function dashboard() {
             content: evt.data?.message || '',
             streaming: false,
             tools: [],
+            ts: Date.now(),
           });
           this._saveChatToSession();
           if (this.openChats.includes(evt.agent)) {
@@ -2119,6 +2132,7 @@ function dashboard() {
             content: m.content,
             streaming: false,
             phase: (m.phase === 'error' || m.phase === 'done') ? m.phase : 'done',
+            ts: m.ts || 0,
             tools: Array.isArray(m.tools) ? m.tools.map(t => ({
               name: t.name,
               status: t.status === 'running' ? 'done' : (t.status || 'done'),
@@ -2528,7 +2542,7 @@ function dashboard() {
       const msg = (inputValue || '').trim();
       if (!msg) return;
       if (!this.chatHistories[agentId]) this.chatHistories[agentId] = [];
-      this.chatHistories[agentId].push({ role: 'user', content: msg });
+      this.chatHistories[agentId].push({ role: 'user', content: msg, ts: Date.now() });
       this.chatLoadingAgents[agentId] = true;
       this.chatStreamingAgents[agentId] = true;
 
@@ -2540,6 +2554,7 @@ function dashboard() {
         tools: [],
         timeline: [],
         _sawTextDelta: false,
+        ts: Date.now(),
       });
       const idx = this.chatHistories[agentId].length - 1;
       this._pushChatTimelinePhase(this.chatHistories[agentId][idx], 'thinking');
@@ -2689,7 +2704,7 @@ function dashboard() {
       const msg = (message || '').trim();
       if (!msg) return;
       if (!this.chatHistories[agentId]) this.chatHistories[agentId] = [];
-      this.chatHistories[agentId].push({ role: 'user', content: `[steer] ${msg}` });
+      this.chatHistories[agentId].push({ role: 'user', content: `[steer] ${msg}`, ts: Date.now() });
       try {
         await fetch(`${window.__config.apiBase}/agents/${agentId}/steer`, {
           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -3576,12 +3591,12 @@ function dashboard() {
     },
 
     _bbNsMap: {
+      'status/': 'status',
       'tasks/': 'tasks',
-      'context/': 'context',
-      'signals/': 'signals',
-      'goals/': 'goals',
+      'research/': 'research',
+      'drafts/': 'drafts',
       'artifacts/': 'artifacts',
-      'history/': 'history',
+      'alerts/': 'alerts',
     },
 
     bbNsName(key) {
