@@ -137,6 +137,7 @@ class AgentLoop:
         self._chat_messages: list[dict] = []
         self._chat_lock = asyncio.Lock()
         self._chat_total_rounds: int = 0
+        self._chat_auto_continues: int = 0
         self._steer_queue: asyncio.Queue[str] = asyncio.Queue()
         self._fleet_roster: list[dict] | None = None  # cached fleet info
         self._fleet_roster_ts: float = 0  # timestamp of last fetch
@@ -737,6 +738,45 @@ class AgentLoop:
 
     CHAT_MAX_TOOL_ROUNDS = 30
     CHAT_MAX_TOTAL_ROUNDS = 200
+    _CHAT_ROUND_WARNING = 160
+    _MAX_SESSION_CONTINUES = 5
+
+    async def _auto_continue_session(self, system: str) -> None:
+        """Force-compact conversation and reset round counter.
+
+        Called when ``_chat_total_rounds`` reaches ``CHAT_MAX_TOTAL_ROUNDS``.
+        Instead of killing the session, we flush facts to memory, summarize
+        the conversation, and reset the counter so the session continues
+        seamlessly — the same pattern used for token-based compaction.
+
+        The round counter and loop detector are always reset, even if
+        compaction fails, to prevent the session from getting stuck at the
+        limit on every subsequent message.
+        """
+        self._chat_auto_continues += 1
+        logger.info(
+            "Auto-continuing chat session (continuation %d/%d, round %d)",
+            self._chat_auto_continues, self._MAX_SESSION_CONTINUES,
+            self._chat_total_rounds,
+        )
+        try:
+            if self.context_manager:
+                self._chat_messages = await self.context_manager.force_compact(
+                    system, self._chat_messages,
+                )
+            else:
+                self._chat_messages = self._trim_context(
+                    self._chat_messages, max_tokens=_FALLBACK_MAX_TOKENS,
+                )
+        except Exception as e:
+            logger.warning(
+                "Auto-continue compaction failed, falling back to trim: %s", e,
+            )
+            self._chat_messages = self._trim_context(
+                self._chat_messages, max_tokens=_FALLBACK_MAX_TOKENS,
+            )
+        self._chat_total_rounds = 0
+        self._loop_detector.reset()
 
     async def chat(self, user_message: str, *, trace_id: str | None = None) -> dict:
         """Handle a single chat turn with persistent conversation history.
@@ -941,16 +981,19 @@ class AgentLoop:
             user_message, system = await self._prepare_chat_turn(user_message)
 
             if self._chat_total_rounds >= self.CHAT_MAX_TOTAL_ROUNDS:
-                self.state = "idle"
-                return {
-                    "response": (
-                        "Chat session has reached its maximum tool round limit "
-                        f"({self.CHAT_MAX_TOTAL_ROUNDS}). Please reset the chat "
-                        "to continue."
-                    ),
-                    "tool_outputs": [],
-                    "tokens_used": 0,
-                }
+                if self._chat_auto_continues >= self._MAX_SESSION_CONTINUES:
+                    self.state = "idle"
+                    return {
+                        "response": (
+                            "Chat session has reached its absolute limit "
+                            f"({self._MAX_SESSION_CONTINUES} continuations × "
+                            f"{self.CHAT_MAX_TOTAL_ROUNDS} rounds). "
+                            "Please reset the chat to continue."
+                        ),
+                        "tool_outputs": [],
+                        "tokens_used": 0,
+                    }
+                await self._auto_continue_session(system)
 
             for _ in range(self.CHAT_MAX_TOOL_ROUNDS):
                 llm_response = await _llm_call_with_retry(
@@ -988,8 +1031,10 @@ class AgentLoop:
                 self._chat_total_rounds += 1
 
                 if self._chat_total_rounds >= self.CHAT_MAX_TOTAL_ROUNDS:
-                    logger.warning("Chat session hit total round limit (%d)", self.CHAT_MAX_TOTAL_ROUNDS)
-                    break
+                    if self._chat_auto_continues >= self._MAX_SESSION_CONTINUES:
+                        logger.warning("Chat session hit absolute limit (%d continues)", self._MAX_SESSION_CONTINUES)
+                        break
+                    await self._auto_continue_session(system)
 
                 await self._compact_chat_context(system)
 
@@ -1089,6 +1134,7 @@ class AgentLoop:
                     logger.warning("Failed to flush memory on chat reset: %s", e)
             self._chat_messages = []
             self._chat_total_rounds = 0
+            self._chat_auto_continues = 0
             self._loop_detector.reset()
             if self.context_manager:
                 self.context_manager.reset()
@@ -1179,6 +1225,16 @@ class AgentLoop:
             if warning:
                 parts.append(f"## {warning}")
 
+        # Round-count warning at 80% of checkpoint interval
+        if self._chat_total_rounds >= self._CHAT_ROUND_WARNING:
+            remaining = self.CHAT_MAX_TOTAL_ROUNDS - self._chat_total_rounds
+            parts.append(
+                f"## Session Note\n"
+                f"This session has been running for {self._chat_total_rounds} tool rounds. "
+                f"Context will be auto-refreshed in ~{remaining} rounds. "
+                f"Consider saving important context to memory if you haven't already."
+            )
+
         return "\n\n".join(parts)
 
     def get_status(self) -> AgentStatus:
@@ -1231,15 +1287,18 @@ class AgentLoop:
             user_message, system = await self._prepare_chat_turn(user_message)
 
             if self._chat_total_rounds >= self.CHAT_MAX_TOTAL_ROUNDS:
-                self.state = "idle"
-                msg = (
-                    "Chat session has reached its maximum tool round limit "
-                    f"({self.CHAT_MAX_TOTAL_ROUNDS}). Please reset the chat "
-                    "to continue."
-                )
-                yield {"type": "text_delta", "content": msg}
-                yield {"type": "done", "response": msg, "tool_outputs": [], "tokens_used": 0}
-                return
+                if self._chat_auto_continues >= self._MAX_SESSION_CONTINUES:
+                    self.state = "idle"
+                    msg = (
+                        "Chat session has reached its absolute limit "
+                        f"({self._MAX_SESSION_CONTINUES} continuations × "
+                        f"{self.CHAT_MAX_TOTAL_ROUNDS} rounds). "
+                        "Please reset the chat to continue."
+                    )
+                    yield {"type": "text_delta", "content": msg}
+                    yield {"type": "done", "response": msg, "tool_outputs": [], "tokens_used": 0}
+                    return
+                await self._auto_continue_session(system)
 
             for _ in range(self.CHAT_MAX_TOOL_ROUNDS):
                 # Try token-level streaming, fall back to non-streaming on error
@@ -1308,8 +1367,10 @@ class AgentLoop:
                 self._chat_total_rounds += 1
 
                 if self._chat_total_rounds >= self.CHAT_MAX_TOTAL_ROUNDS:
-                    logger.warning("Chat session hit total round limit (%d)", self.CHAT_MAX_TOTAL_ROUNDS)
-                    break
+                    if self._chat_auto_continues >= self._MAX_SESSION_CONTINUES:
+                        logger.warning("Chat session hit absolute limit (%d continues)", self._MAX_SESSION_CONTINUES)
+                        break
+                    await self._auto_continue_session(system)
 
                 await self._compact_chat_context(system)
 

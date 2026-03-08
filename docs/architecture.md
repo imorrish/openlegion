@@ -193,7 +193,7 @@ Both implement `RuntimeBackend` ABC so the rest of the system is isolation-agnos
 2. **No `eval()` on untrusted input** -- workflow conditions use a regex-based safe parser
 3. **Permission checks before every cross-boundary operation** -- default deny
 4. **Path traversal protection** -- agent file operations confined to `/data`
-5. **Bounded execution** -- 20 iterations for tasks, 30 tool rounds for chat, 200 total rounds per session
+5. **Bounded execution** -- 20 iterations for tasks, 30 tool rounds per chat turn, auto-compaction every 200 rounds with seamless continuation
 6. **Write-then-compact** -- facts are flushed to memory before discarding context
 7. **Tool-call message grouping** -- assistant(tool_calls) and tool(results) are never separated in context trimming
 8. **Unicode sanitization** -- all untrusted text passes through `sanitize_for_prompt()` before reaching LLM context (user input, tool results, system prompt context)
