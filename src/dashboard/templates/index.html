@@ -851,7 +851,7 @@
                 </div>
               </div>
 
-              <!-- Agent actions: Chat, Restart (hidden when locked) -->
+              <!-- Agent actions: Chat + heartbeat Pause/Resume (hidden when locked) -->
               <template x-if="!agent.over_limit">
                 <div class="mt-3 pt-3 border-t border-gray-800/30 flex flex-nowrap gap-1.5">
                   <button @click="openChat(agent.id)" class="action-btn action-btn-primary flex-1 justify-center"
@@ -859,12 +859,13 @@
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     <span x-text="openChats.includes(agent.id) ? 'Chatting' : 'Chat'"></span>
                   </button>
-                  <button @click="restartAgent(agent.id)" class="action-btn action-btn-warn"
-                    :disabled="_restartingAgents[agent.id]"
-                    :class="_restartingAgents[agent.id] && 'opacity-50 cursor-not-allowed'">
-                    <svg x-show="!_restartingAgents[agent.id]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                    <svg x-show="_restartingAgents[agent.id]" x-cloak class="animate-spin" fill="none" viewBox="0 0 24 24" stroke-width="2"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    <span x-text="_restartingAgents[agent.id] ? 'Restarting...' : 'Restart'"></span>
+                  <button x-show="agent.heartbeat_job_id" @click="toggleHeartbeat(agent)"
+                    :disabled="cronPauseLoading[agent.heartbeat_job_id] === true"
+                    class="action-btn action-btn-warn disabled:opacity-50">
+                    <svg x-show="cronPauseLoading[agent.heartbeat_job_id] !== true && agent.heartbeat_enabled" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    <svg x-show="cronPauseLoading[agent.heartbeat_job_id] !== true && !agent.heartbeat_enabled" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg x-show="cronPauseLoading[agent.heartbeat_job_id] === true" x-cloak class="animate-spin" fill="none" viewBox="0 0 24 24" stroke-width="2"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    <span x-text="cronPauseLoading[agent.heartbeat_job_id] === true ? '...' : (agent.heartbeat_enabled ? 'Pause' : 'Resume')"></span>
                   </button>
                 </div>
               </template>
@@ -1090,7 +1091,7 @@
         <div class="px-3 py-2.5 border-t border-gray-800 shrink-0" x-data="{ chatInput: '' }">
           <div class="chat-input-wrap">
             <textarea x-model="chatInput" id="chat-slide-input" rows="2"
-              :disabled="chatLoadingAgents[activeChatId]"
+              :disabled="chatLoadingAgents[activeChatId] === true"
               @keydown.enter="if (!$event.shiftKey && chatInput.trim()) { $event.preventDefault(); if (isAgentBusy(activeChatId)) { steerAgent(activeChatId, chatInput); } else { sendChatTo(activeChatId, chatInput); } chatInput = ''; $el.style.height = 'auto'; }"
               @input="$el.style.height = 'auto'; $el.style.height = Math.min($el.scrollHeight, 120) + 'px'"
               class="chat-slide-textarea"
@@ -1395,7 +1396,7 @@
                   Browser
                 </button>
                 <span class="w-px h-5 bg-gray-700/60"></span>
-                <button @click="restartAgent(selectedAgent)" :disabled="_restartingAgents[selectedAgent]" class="action-btn action-btn-warn px-3 py-1.5 disabled:opacity-50">
+                <button @click="restartAgent(selectedAgent)" :disabled="_restartingAgents[selectedAgent] === true" class="action-btn action-btn-warn px-3 py-1.5 disabled:opacity-50">
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
                   Restart
                 </button>
@@ -1922,15 +1923,15 @@
                         </div>
                       </div>
                       <div class="flex gap-1 flex-shrink-0">
-                        <button @click="runCronJob(job.id)" :disabled="cronRunLoading[job.id]"
+                        <button @click="runCronJob(job.id)" :disabled="cronRunLoading[job.id] === true"
                           class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 hover:bg-indigo-800/40 text-indigo-300 hover:text-indigo-200 transition-colors disabled:opacity-50"
-                          x-text="cronRunLoading[job.id] ? '...' : 'Run'"></button>
-                        <button x-show="job.enabled" @click="pauseCronJob(job.id)" :disabled="cronPauseLoading[job.id]"
+                          x-text="cronRunLoading[job.id] === true ? '...' : 'Run'"></button>
+                        <button x-show="job.enabled" @click="pauseCronJob(job.id)" :disabled="cronPauseLoading[job.id] === true"
                           class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-yellow-900/30 text-gray-300 hover:text-yellow-400 transition-colors disabled:opacity-50"
-                          x-text="cronPauseLoading[job.id] ? '...' : 'Pause'"></button>
-                        <button x-show="!job.enabled" @click="resumeCronJob(job.id)" :disabled="cronPauseLoading[job.id]"
+                          x-text="cronPauseLoading[job.id] === true ? '...' : 'Pause'"></button>
+                        <button x-show="!job.enabled" @click="resumeCronJob(job.id)" :disabled="cronPauseLoading[job.id] === true"
                           class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-green-900/30 text-gray-300 hover:text-green-400 transition-colors disabled:opacity-50"
-                          x-text="cronPauseLoading[job.id] ? '...' : 'Resume'"></button>
+                          x-text="cronPauseLoading[job.id] === true ? '...' : 'Resume'"></button>
                         <button x-show="!job.heartbeat" @click="deleteCronJob(job.id)"
                           class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-red-900/30 text-gray-300 hover:text-red-400 transition-colors">Del</button>
                       </div>
@@ -2174,11 +2175,11 @@
                       <td class="py-2.5 px-4 font-mono text-gray-300" x-text="job.run_count"></td>
                       <td class="py-2.5 px-4 font-mono" :class="job.error_count > 0 ? 'text-red-400' : 'text-gray-600'" x-text="job.error_count"></td>
                       <td class="py-2.5 px-4 flex gap-1">
-                        <button @click="runCronJob(job.id)" :disabled="cronRunLoading[job.id]" class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 hover:bg-indigo-800/40 text-indigo-300 hover:text-indigo-200 transition-colors disabled:opacity-50" x-text="cronRunLoading[job.id] ? '...' : 'Run'"></button>
-                        <button x-show="job.enabled" @click="pauseCronJob(job.id)" :disabled="cronPauseLoading[job.id]"
-                          class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-yellow-900/30 text-gray-300 hover:text-yellow-400 transition-colors disabled:opacity-50" x-text="cronPauseLoading[job.id] ? '...' : 'Pause'"></button>
-                        <button x-show="!job.enabled" @click="resumeCronJob(job.id)" :disabled="cronPauseLoading[job.id]"
-                          class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-green-900/30 text-gray-300 hover:text-green-400 transition-colors disabled:opacity-50" x-text="cronPauseLoading[job.id] ? '...' : 'Resume'"></button>
+                        <button @click="runCronJob(job.id)" :disabled="cronRunLoading[job.id] === true" class="text-[11px] px-1.5 py-0.5 rounded bg-indigo-900/30 hover:bg-indigo-800/40 text-indigo-300 hover:text-indigo-200 transition-colors disabled:opacity-50" x-text="cronRunLoading[job.id] === true ? '...' : 'Run'"></button>
+                        <button x-show="job.enabled" @click="pauseCronJob(job.id)" :disabled="cronPauseLoading[job.id] === true"
+                          class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-yellow-900/30 text-gray-300 hover:text-yellow-400 transition-colors disabled:opacity-50" x-text="cronPauseLoading[job.id] === true ? '...' : 'Pause'"></button>
+                        <button x-show="!job.enabled" @click="resumeCronJob(job.id)" :disabled="cronPauseLoading[job.id] === true"
+                          class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-green-900/30 text-gray-300 hover:text-green-400 transition-colors disabled:opacity-50" x-text="cronPauseLoading[job.id] === true ? '...' : 'Resume'"></button>
                         <button x-show="!job.heartbeat" @click="deleteCronJob(job.id)"
                           class="text-[11px] px-1.5 py-0.5 rounded bg-gray-700 hover:bg-red-900/30 text-gray-300 hover:text-red-400 transition-colors">Delete</button>
                       </td>
@@ -2220,9 +2221,9 @@
                       <td class="px-4 py-2 text-gray-400 text-xs" x-text="wf.steps"></td>
                       <td class="px-4 py-2 text-gray-400 text-xs" x-text="wf.timeout + 's'"></td>
                       <td class="px-4 py-2 text-right">
-                        <button @click="runWorkflow(wf.name)" :disabled="workflowRunLoading[wf.name]" class="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50 inline-flex items-center gap-1">
-                          <svg x-show="workflowRunLoading[wf.name]" x-cloak class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                          <span x-text="workflowRunLoading[wf.name] ? 'Running...' : 'Run'"></span>
+                        <button @click="runWorkflow(wf.name)" :disabled="workflowRunLoading[wf.name] === true" class="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50 inline-flex items-center gap-1">
+                          <svg x-show="workflowRunLoading[wf.name] === true" x-cloak class="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                          <span x-text="workflowRunLoading[wf.name] === true ? 'Running...' : 'Run'"></span>
                         </button>
                       </td>
                     </tr>
@@ -2239,10 +2240,10 @@
                       <span x-text="exec.workflow || exec.execution_id"></span>
                       <span class="text-gray-600" x-text="exec.status || 'running'"></span>
                       <button @click="cancelWorkflow(exec.execution_id)"
-                        :disabled="_cancellingWorkflows[exec.execution_id]"
+                        :disabled="_cancellingWorkflows[exec.execution_id] === true"
                         :aria-label="'Cancel workflow ' + (exec.workflow || exec.execution_id)"
                         class="text-[10px] px-1.5 py-0.5 rounded bg-gray-800 hover:bg-red-900/30 text-gray-500 hover:text-red-400 transition-all ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
-                        x-text="_cancellingWorkflows[exec.execution_id] ? 'Cancelling...' : 'Cancel'"></button>
+                        x-text="_cancellingWorkflows[exec.execution_id] === true ? 'Cancelling...' : 'Cancel'"></button>
                     </div>
                   </template>
                 </div>
@@ -2475,8 +2476,8 @@
                     class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-gray-200 transition-all" title="Copy URL" aria-label="Copy webhook URL">
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                   </button>
-                  <button @click="testWebhook(wh.name)" :disabled="webhookTesting[wh.name]"
-                    class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 hover:bg-indigo-900/40 text-gray-400 hover:text-indigo-300 transition-all disabled:opacity-50" x-text="webhookTesting[wh.name] ? '...' : 'Test'"></button>
+                  <button @click="testWebhook(wh.name)" :disabled="webhookTesting[wh.name] === true"
+                    class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 hover:bg-indigo-900/40 text-gray-400 hover:text-indigo-300 transition-all disabled:opacity-50" x-text="webhookTesting[wh.name] === true ? '...' : 'Test'"></button>
                   <button @click="deleteWebhook(wh.name)"
                     class="opacity-0 group-hover:opacity-100 focus:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 transition-all">Delete</button>
                 </div>
