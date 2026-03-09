@@ -15,6 +15,7 @@ Exposes endpoints for the mesh/orchestrator to interact with:
   GET  /heartbeat-context - single-call heartbeat bootstrap data
   GET  /artifacts - list artifact files
   GET  /artifacts/{name} - read artifact content
+  DELETE /artifacts/{name} - delete artifact file
 """
 
 from __future__ import annotations
@@ -413,6 +414,29 @@ def create_agent_app(loop: AgentLoop) -> FastAPI:
             raw = filepath.read_bytes()
             return {"name": name, "content": base64.b64encode(raw).decode("ascii"),
                     "size": size, "mime_type": mime, "encoding": "base64"}
+
+    @app.delete("/artifacts/{name:path}")
+    async def delete_artifact(name: str) -> dict:
+        """Delete an artifact file from the workspace."""
+        if not loop.workspace:
+            raise HTTPException(503, "Workspace not available")
+        if not _ARTIFACT_NAME_RE.match(name):
+            raise HTTPException(400, f"Invalid artifact name: {name}")
+        from pathlib import Path
+        artifacts_dir = Path(loop.workspace.root) / "artifacts"
+        filepath = (artifacts_dir / name).resolve()
+        if not filepath.is_relative_to(artifacts_dir.resolve()):
+            raise HTTPException(400, "Path traversal not allowed")
+        if not filepath.is_file():
+            raise HTTPException(404, f"Artifact not found: {name}")
+        filepath.unlink()
+        # Clean up empty parent directories up to (but not including) artifacts_dir
+        resolved_artifacts = artifacts_dir.resolve()
+        parent = filepath.parent
+        while parent != resolved_artifacts and not any(parent.iterdir()):
+            parent.rmdir()
+            parent = parent.parent
+        return {"deleted": True, "name": name}
 
     return app
 

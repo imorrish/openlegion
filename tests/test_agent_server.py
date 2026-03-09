@@ -380,3 +380,54 @@ class TestTaskCancellation:
             # State should be reset to idle
             assert loop.state == "idle"
             assert loop.current_task is None
+
+
+class TestArtifactDelete:
+    @pytest.mark.asyncio
+    async def test_delete_artifact(self, tmp_workspace):
+        app, _ = _make_app(tmp_workspace)
+        artifacts_dir = Path(tmp_workspace) / "artifacts"
+        artifacts_dir.mkdir()
+        (artifacts_dir / "report.md").write_text("# Report")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.delete("/artifacts/report.md")
+            assert resp.status_code == 200
+            assert resp.json()["deleted"] is True
+            assert not (artifacts_dir / "report.md").exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_artifact_not_found(self, tmp_workspace):
+        app, _ = _make_app(tmp_workspace)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.delete("/artifacts/missing.txt")
+            assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_artifact_invalid_name(self, tmp_workspace):
+        app, _ = _make_app(tmp_workspace)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.delete("/artifacts/!invalid")
+            assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_delete_artifact_cleans_empty_dirs(self, tmp_workspace):
+        app, _ = _make_app(tmp_workspace)
+        artifacts_dir = Path(tmp_workspace) / "artifacts"
+        subdir = artifacts_dir / "sub" / "deep"
+        subdir.mkdir(parents=True)
+        (subdir / "file.txt").write_text("data")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.delete("/artifacts/sub/deep/file.txt")
+            assert resp.status_code == 200
+            # Empty parent dirs should be cleaned up
+            assert not subdir.exists()
+            assert not (artifacts_dir / "sub").exists()
+            # artifacts_dir itself should remain
+            assert artifacts_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_delete_artifact_no_workspace(self):
+        app, _ = _make_app(workspace_dir=None)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            resp = await client.delete("/artifacts/file.txt")
+            assert resp.status_code == 503
