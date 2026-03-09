@@ -72,6 +72,17 @@ def _parse_positive_float(value: Any, field: str, fallback: float) -> float:
     return result
 
 
+def _log_cron_task_exception(task: object) -> None:
+    """Log unhandled exceptions from fire-and-forget cron tasks."""
+    import asyncio
+    t = task if isinstance(task, asyncio.Task) else None
+    if t is None or t.cancelled():
+        return
+    exc = t.exception()
+    if exc:
+        logger.error("Background cron job failed: %s", exc, exc_info=exc)
+
+
 def create_dashboard_router(
     blackboard: Blackboard,
     health_monitor: HealthMonitor | None,
@@ -1524,7 +1535,8 @@ def create_dashboard_router(
         # immediately.  Agent execution can take minutes; blocking the request
         # made the dashboard Run button appear stuck.
         import asyncio
-        asyncio.create_task(cron_scheduler.run_job(job_id))
+        task = asyncio.create_task(cron_scheduler.run_job(job_id))
+        task.add_done_callback(_log_cron_task_exception)
         return {"triggered": True, "job_id": job_id}
 
     @api_router.put("/api/cron/{job_id}")
