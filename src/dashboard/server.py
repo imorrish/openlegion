@@ -220,6 +220,7 @@ def create_dashboard_router(
             if cron_scheduler is not None:
                 hb = cron_scheduler.find_heartbeat_job(agent_id)
                 if hb:
+                    entry["heartbeat_job_id"] = hb.id
                     entry["heartbeat_schedule"] = hb.schedule
                     entry["heartbeat_enabled"] = hb.enabled
                     entry["heartbeat_next_run"] = hb.next_run

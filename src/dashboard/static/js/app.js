@@ -1874,6 +1874,25 @@ function dashboard() {
       }, true);
     },
 
+    async toggleHeartbeat(agent) {
+      const jobId = agent.heartbeat_job_id;
+      if (!jobId || this.cronPauseLoading[jobId]) return;
+      this.cronPauseLoading = { ...this.cronPauseLoading, [jobId]: true };
+      const action = agent.heartbeat_enabled ? 'pause' : 'resume';
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/cron/${jobId}/${action}`, { method: 'POST' });
+        if (resp.ok) {
+          this.showToast(`${agent.id} heartbeat ${action}d`);
+          this.fetchAgents();
+          this.fetchCronJobs();
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Error: ${err.detail || action + ' failed'}`);
+        }
+      } catch (e) { this.showToast(`Error: ${e.message}`); }
+      finally { this.cronPauseLoading = { ...this.cronPauseLoading, [jobId]: false }; }
+    },
+
     async updateBudget(agentId, dailyUsd, monthlyUsd) {
       try {
         const body = {};
