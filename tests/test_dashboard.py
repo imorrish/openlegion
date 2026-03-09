@@ -2800,3 +2800,45 @@ class TestCredentialValidation:
         data = resp.json()
         assert data["valid"] is True
         assert data["skipped"] is False
+
+
+# ── Artifact delete tests ──────────────────────────────────
+
+
+class TestDashboardArtifactDelete:
+    def setup_method(self):
+        self._tmpdir = tempfile.mkdtemp()
+        self.components = _make_components(self._tmpdir, include_v2=True)
+        self.client = _make_client(self.components)
+
+    def teardown_method(self):
+        _teardown(self.components)
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    def test_delete_artifact_success(self):
+        self.components["transport"].request = AsyncMock(
+            return_value={"deleted": True, "name": "report.md"},
+        )
+        resp = self.client.delete("/dashboard/api/agents/alpha/artifacts/report.md")
+        assert resp.status_code == 200
+        assert resp.json()["deleted"] is True
+        self.components["transport"].request.assert_called_once_with(
+            "alpha", "DELETE", "/artifacts/report.md", timeout=10,
+        )
+
+    def test_delete_artifact_not_found_agent(self):
+        resp = self.client.delete("/dashboard/api/agents/nonexistent/artifacts/file.txt")
+        assert resp.status_code == 404
+
+    def test_delete_artifact_transport_error(self):
+        self.components["transport"].request = AsyncMock(
+            return_value={"error": "Artifact not found: missing.txt", "status_code": 404},
+        )
+        resp = self.client.delete("/dashboard/api/agents/alpha/artifacts/missing.txt")
+        assert resp.status_code == 404
+
+    def test_delete_artifact_no_transport(self):
+        self.components["transport"] = None
+        self.client = _make_client(self.components)
+        resp = self.client.delete("/dashboard/api/agents/alpha/artifacts/file.txt")
+        assert resp.status_code == 503

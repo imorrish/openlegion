@@ -984,6 +984,24 @@ def create_dashboard_router(
         except Exception as e:
             raise HTTPException(status_code=502, detail=str(e))
 
+    @api_router.delete("/api/agents/{agent_id}/artifacts/{name:path}")
+    async def api_delete_artifact(agent_id: str, name: str) -> dict:
+        """Delete an artifact file from an agent's workspace."""
+        if agent_id not in agent_registry:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        if transport is None:
+            raise HTTPException(status_code=503, detail="Transport not available")
+        try:
+            result = await transport.request(agent_id, "DELETE", f"/artifacts/{name}", timeout=10)
+            if "error" in result:
+                status = result.get("status_code", 502)
+                raise HTTPException(status_code=status, detail=result["error"])
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
     @api_router.post("/api/credentials/validate")
     async def api_validate_credential(request: Request) -> dict:
         """Validate an API key by making a minimal LLM call."""

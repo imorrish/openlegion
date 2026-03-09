@@ -1630,6 +1630,27 @@ function dashboard() {
       }
     },
 
+    async deleteArtifact(art) {
+      if (!confirm(`Delete artifact "${art.name}" from ${art.agent}?`)) return;
+      try {
+        const resp = await fetch(`${window.__config.apiBase}/agents/${art.agent}/artifacts/${encodeURIComponent(art.name)}`, {
+          method: 'DELETE', credentials: 'same-origin',
+        });
+        if (resp.ok) {
+          this.showToast(`Deleted ${art.name}`);
+          this.artifactsList = this.artifactsList.filter(a => !(a.agent === art.agent && a.name === art.name));
+          if (this.artifactPreview?.agent === art.agent && this.artifactPreview?.name === art.name) {
+            this.artifactPreview = null;
+          }
+        } else {
+          const err = await resp.json().catch(() => ({}));
+          this.showToast(`Delete failed: ${err.detail || resp.status}`);
+        }
+      } catch (e) {
+        this.showToast('Delete failed: ' + (e.message || e));
+      }
+    },
+
     artifactIsText(name) {
       const textExts = ['.md', '.txt', '.json', '.csv', '.yaml', '.yml', '.xml', '.html', '.css', '.js', '.ts', '.py', '.sh', '.sql', '.log', '.env', '.toml', '.ini', '.cfg'];
       return textExts.some(ext => name.toLowerCase().endsWith(ext));
