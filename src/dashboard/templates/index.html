@@ -167,8 +167,8 @@
     </div>
 
     <!-- Navigation bar -->
-    <nav class="nav-bar px-2 sm:px-4 py-2.5 flex items-center justify-between shrink-0 gap-2">
-      <div class="flex items-center gap-2 sm:gap-5 min-w-0">
+    <nav class="nav-bar px-3 sm:px-5 py-2.5 flex items-center shrink-0 gap-3">
+      <div class="flex items-center gap-2 sm:gap-4 min-w-0 shrink-0">
         <div class="flex items-center gap-2.5">
           <img src="/dashboard/static/logo.png" alt="OpenLegion" width="24" height="24" class="rounded-full">
           <span class="text-base font-bold text-white tracking-tight hidden sm:inline">OpenLegion</span>
@@ -184,7 +184,6 @@
               role="tab"
               :aria-selected="activeTab === tab.id"
             >
-              <!-- Tab icons -->
               <template x-if="tab.id === 'fleet'">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
               </template>
@@ -195,7 +194,6 @@
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
               </template>
               <span x-text="tab.id === 'fleet' && agents.length ? 'Agents (' + runningAgents.length + ')' : tab.label"></span>
-              <!-- Unread event count badge -->
               <span
                 x-show="tab.id === 'activity' && unreadEvents > 0 && activeTab !== 'activity'"
                 x-text="unreadEvents >= 100 ? '99+' : unreadEvents"
@@ -206,34 +204,32 @@
           </template>
         </div>
       </div>
-      <div class="flex items-center gap-4">
-        <!-- Fleet total cost (click to System > Costs) -->
-        <div class="text-xs text-gray-400 hidden sm:block cursor-pointer hover:text-gray-200 transition-colors" x-show="fleetTotalCost > 0" @click="systemTab = 'costs'; switchTab('system')">
-          Today: <span class="text-gray-200 font-medium" x-text="formatCost(fleetTotalCost)"></span>
-        </div>
-        <!-- Command palette trigger -->
+      <!-- Command palette trigger (centered) -->
+      <div class="hidden sm:flex flex-1 justify-start pl-4">
         <button @click="cmdPaletteOpen = true; cmdPaletteQuery = ''; cmdPaletteResults = []; $nextTick(() => { const el = document.getElementById('cmd-palette-input'); if (el) el.focus(); })"
-          class="hidden sm:flex items-center gap-2 text-xs text-gray-500 hover:text-gray-300 bg-gray-800/50 hover:bg-gray-800 px-2.5 py-1.5 rounded-lg border border-gray-700/50 transition-colors cursor-pointer"
+          class="flex items-center gap-2.5 text-[13px] text-gray-500 hover:text-gray-300 bg-gray-800/40 hover:bg-gray-800/80 pl-3.5 pr-3 py-1.5 rounded-lg border border-gray-700/40 hover:border-gray-600/60 transition-all cursor-pointer w-80"
           title="Search (Cmd+K)">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <span>Search</span>
-          <kbd class="text-[10px] text-gray-600 bg-gray-900 px-1 py-0.5 rounded border border-gray-700 ml-1">&#8984;K</kbd>
+          <svg class="w-3.5 h-3.5 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <span class="flex-1 text-left">Search...</span>
+          <kbd class="text-[10px] text-gray-600 bg-gray-900/80 px-1.5 py-0.5 rounded border border-gray-700/60 font-sans">&#8984;K</kbd>
         </button>
-        <!-- Model health indicator -->
+      </div>
+      <div class="flex items-center gap-4 shrink-0">
+        <div class="text-xs text-gray-500 hidden sm:block cursor-pointer hover:text-gray-300 transition-colors" x-show="fleetTotalCost > 0" @click="systemTab = 'costs'; switchTab('system')">
+          Today: <span class="text-gray-300 font-medium" x-text="formatCost(fleetTotalCost)"></span>
+        </div>
         <div x-show="modelsDown > 0" x-cloak class="flex items-center gap-1.5 text-xs relative group/health cursor-default" tabindex="0" role="status" aria-label="Model health status">
           <span class="relative flex h-2 w-2">
             <span class="bg-red-400 animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"></span>
             <span class="bg-red-400 relative inline-flex rounded-full h-2 w-2"></span>
           </span>
           <span class="text-red-400" x-text="modelsDown + ' model' + (modelsDown !== 1 ? 's' : '') + ' down'"></span>
-          <!-- Tooltip -->
           <div class="absolute top-full right-0 mt-1 w-48 bg-gray-900 border border-gray-700 rounded-lg p-2 shadow-xl hidden group-hover/health:block group-focus-within/health:block z-50">
             <template x-for="m in modelHealth.filter(x => !x.available)" :key="m.model">
               <div class="text-[10px] text-red-400 py-0.5 truncate" x-text="m.model + ' (cooldown)'"></div>
             </template>
           </div>
         </div>
-        <!-- Connection indicator -->
         <div class="flex items-center gap-1.5 text-xs">
           <span class="relative flex h-2 w-2">
             <span :class="connected ? 'bg-green-400' : 'bg-red-400'" class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" x-show="connected"></span>
